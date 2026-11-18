@@ -13,6 +13,49 @@ You ──▶ Claude (orchestrator)
 
 > The agent rules (`AGENTS.md`, `CLAUDE.md`) are written in Korean and tell the agents to answer in Korean. See [Customize it](#customize-it) to change that.
 
+## Quick start: let an agent set it up
+
+Install the Herdr app, start Claude Code (`claude`) in this folder from a **terminal inside Herdr**, and paste the prompt below. You still install and sign in to Herdr and Claude Code yourself (see [section 1](#1-install-the-tools)).
+
+```text
+Run the "Agent setup steps" in README.md from top to bottom to set up the multi-agent environment in this folder.
+Run each step's check first and skip the step if it already passes. Ask me before any step marked "ask the user".
+When you finish, give me a table of each step's result (done / skipped / needs your action).
+```
+
+### Agent setup steps
+
+> This section is for the agent doing the setup (Claude Code). Run each step as **check → act if the check fails → check again**. If the check passes, skip the action. If a step fails, don't go on: report the cause and the output to the user.
+>
+> Never do these on the user's behalf: interactive sign-ins (first run of `claude`/`codex`/`pi`), key presses in trust or permission dialogs, `sudo` commands, approving bypass mode. Stop at those steps and tell the user exactly what to do. For commands the user must run, tell them to type `! <command>` at the prompt.
+
+| # | Step | Check (passes when) | Action (if the check fails) |
+|---|---|---|---|
+| 1 | Running inside Herdr | `echo "$HC_TERMINAL_ID"` (not empty) | **Stop.** Ask the user to restart `claude` from a terminal inside the Herdr app |
+| 2 | herdr-core (`hc`) | `hc --version` (prints a version) | **Ask the user**, then `curl -fsSL https://releases.herdr.dev/core/install.sh \| sh`. Never run bare `hc` |
+| 3 | jq | `command -v jq` | `brew install jq` |
+| 4 | Codex CLI | `command -v codex` | `npm i -g @openai/codex@latest` |
+| 5 | pi | `command -v pi` | `npm i -g @earendil-works/pi-coding-agent` |
+| 6 | npm permission error | Did step 4 or 5 fail with `EACCES` or "root-owned files"? | **Ask the user** to run `! sudo chown -R "$(id -u):$(id -g)" ~/.npm` themselves, then redo steps 4–5 |
+| 7 | Codex and pi sign-in | Ask the user whether they've signed in (the agent can't check) | **User action.** Tell them to run `codex` and `pi` once each in a separate terminal and sign in |
+| 8 | Codex permission mode | `grep -n 'dangerously-bypass' .hc/up.sh` and the approval record in section 4 of `AGENTS.md` | **Ask the user** whether to keep bypass mode or switch to the sandbox. For the sandbox, replace the launch line in `.hc/up.sh` with the one in [the section below](#️-codex-runs-in-bypass-mode) and rewrite the approval record in `AGENTS.md` section 4 to match |
+| 9 | Start child terminals | `.hc/up.sh; echo "exit=$?"` (`exit=0`, Codex and pi are `idle`) | Follow "Fixing `up.sh`" below |
+| 10 | Messaging works | Send pi a short `[hc-task]` (for example `echo ok`) and check that an `[hc-report]` comes back (format in `AGENTS.md` section 2-2) | If no report arrives, look at `hc read <target> --lines 100 --json` and report to the user |
+| 11 | (Optional) bercail theme | `test -f ~/.config/herdr-app/layouts/bercail.json` | **Ask the user.** If they want it, walk them through [section 2](#2-install-the-theme-layout-bercail) (they copy the install line from herdr.dev) |
+
+#### Fixing `up.sh`
+
+If `up.sh` warns and exits with code 1, look at the terminal it names with `hc read <name> --lines 60`, then:
+
+| Screen | What to do |
+|---|---|
+| A folder trust dialog such as `Trust this folder?` (common on Codex's first run) | Don't press keys for the user. Ask them to choose in that terminal, then run `.hc/up.sh` again |
+| A sign-in screen | Go back to step 7 and ask the user to sign in |
+| A harmless notice, such as an update prompt | Press `esc` to dismiss it, then run `.hc/up.sh` again |
+| `경고: 필요한 명령 없음: <command>` (missing command) | Go back to the matching step, 2–5 |
+| `하위 터미널이 여러 개입니다` (several child terminals) | Check that you created them, ask the user, then keep one (`hc kill <name>`) |
+| Any other error, or `error` state | Report the screen contents to the user as they are |
+
 ## Files
 
 | File | Purpose |
