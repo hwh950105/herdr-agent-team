@@ -2,12 +2,12 @@
 
 [English](README.md) | **한국어**
 
-[Herdr](https://herdr.dev) 앱 안에서 **Claude Code가 오케스트레이터**가 되어 **Codex**(구현·검증)와 **pi**(보조: 검색·lint·test 실행)를 하위 터미널로 띄우고, `hc` 명령으로 작업을 주고받는 공동 작업 폴더 템플릿입니다. 프로젝트 이름에 의존하지 않으므로 새 프로젝트에 파일을 그대로 복사해 씁니다.
+[Herdr](https://herdr.dev) 앱 안에서 **Claude Code가 오케스트레이터**가 되어 **Codex**(구현·검증)와 **pi**(브라우저 QA 테스터: ego lite로 실제 화면 검증)를 하위 터미널로 띄우고, `hc` 명령으로 작업을 주고받는 공동 작업 폴더 템플릿입니다. 프로젝트 이름에 의존하지 않으므로 새 프로젝트에 파일을 그대로 복사해 씁니다.
 
 ```
 사용자 ──▶ Claude (오케스트레이터)
              ├─ hc send ─▶ Codex (<접두사>-codex)   구현·테스트·디버깅
-             └─ hc send ─▶ pi    (<접두사>-pi)      읽기·검색·검증 실행
+             └─ hc send ─▶ pi    (<접두사>-pi)      브라우저 QA (ego lite)
                  ◀─ [hc-report] ─┘
 ```
 
@@ -34,11 +34,13 @@ README.ko.md의 "에이전트용 셋팅 절차"를 위에서부터 차례대로 
 | 3 | jq | `command -v jq` | `brew install jq` |
 | 4 | Codex CLI | `command -v codex` | `npm i -g @openai/codex@latest` |
 | 5 | pi | `command -v pi` | `npm i -g @earendil-works/pi-coding-agent` |
+| 5-1 | ego lite (pi의 브라우저) | `command -v ego-browser && ego-browser --version` | **사용자 조치.** ego lite 앱을 설치하고 앱의 첫 실행 안내(onboarding)를 마치게 한다. 그러면 `~/.local/bin/ego-browser`가 생긴다. 명령이 없다고 나오면 `export PATH="$HOME/.local/bin:$PATH"` 후 다시 확인한다 |
 | 6 | npm 권한 오류 | 4·5단계가 `EACCES`나 "root-owned files"로 실패했는지 | **사용자 확인.** `sudo chown -R "$(id -u):$(id -g)" ~/.npm`을 사용자가 `! ` 접두사로 직접 실행하게 안내한 뒤 4·5단계를 다시 한다 |
 | 7 | Codex·pi 로그인 | 사용자에게 로그인했는지 묻는다(에이전트가 확인할 방법이 없음) | **사용자 조치.** 별도 터미널에서 `codex`, `pi`를 한 번씩 실행해 로그인하라고 안내한다 |
 | 8 | Codex 권한 모드 | `grep -n 'dangerously-bypass' .hc/up.sh` 결과와 `AGENTS.md` 4절의 승인 기록 | **사용자 확인.** 우회 모드를 그대로 쓸지, 샌드박스 모드로 바꿀지 묻는다. 샌드박스를 고르면 [아래 절](#️-codex-권한-우회-모드에-대해)의 실행 줄로 `.hc/up.sh`를 고치고 `AGENTS.md` 4절의 승인 기록을 그 결정으로 바꿔 적는다 |
 | 9 | 하위 터미널 기동 | `.hc/up.sh; echo "exit=$?"` (`exit=0`, Codex·pi가 `idle`) | 아래 "`up.sh` 문제 해결"을 따른다 |
 | 10 | 통신 확인 | pi에게 `[hc-task]`로 `echo ok` 같은 짧은 작업을 보내고 `[hc-report]`가 돌아오는지 본다(형식은 `AGENTS.md` 2-2절) | 보고가 없으면 `hc read <대상> --lines 100 --json`으로 화면을 보고 사용자에게 보고한다 |
+| 10-1 | pi 브라우저 확인 | pi에게 `[hc-task]`로 `ego-browser skill`을 읽고 `taskSpace("qa-smoke")`에서 `https://example.com`의 제목을 읽어 보고하라고 지시한다(`대상 URL: https://example.com`) | 실패하면 pi 화면을 사용자에게 보고한다. 이미지 입력 지원 여부도 함께 묻는다(지원하지 않으면 시각 검증은 미검증으로 처리) |
 | 11 | (선택) bercail 테마 | `test -f ~/.config/herdr-app/layouts/bercail.json` | **사용자 확인.** 원하면 [2절](#2-테마레이아웃-설치-bercail) 절차를 안내한다(설치 문장은 사용자가 herdr.dev에서 복사해 와야 한다) |
 
 #### `up.sh` 문제 해결
@@ -62,6 +64,7 @@ README.ko.md의 "에이전트용 셋팅 절차"를 위에서부터 차례대로 
 | `CLAUDE.md` | Claude Code 전용 메모. `@AGENTS.md`를 불러온다 |
 | `.hc/up.sh` | Codex·pi 하위 터미널을 띄우거나, 이미 떠 있는 것을 검사하는 스크립트 |
 | `.hc/reports/` | 에이전트 보고서 폴더(git 제외) |
+| `.hc/qa/` | pi 브라우저 검증의 스크린샷·증거 파일(git 제외) |
 
 ## 1. 필요한 프로그램 설치
 
@@ -99,6 +102,18 @@ npm i -g @earendil-works/pi-coding-agent          # pi
 
 각 CLI에 처음 한 번 로그인합니다(`claude`, `codex`, `pi`를 각각 실행).
 
+### ego lite (pi의 브라우저)
+
+pi는 **ego lite 앱**(에이전트용 Chromium 브라우저)의 `ego-browser` CLI로 브라우저를 조작합니다. 앱을 설치하고 첫 실행 안내를 마치면 `~/.local/bin/ego-browser`가 등록됩니다.
+
+```bash
+command -v ego-browser   # ~/.local/bin/ego-browser
+ego-browser --version    # 예: ego-browser 0.6.3.17
+ego-browser skill        # 에이전트용 사용법 출력 (pi가 작업 전에 읽는다)
+```
+
+> ego lite는 사용자가 로그인한 실제 사이트 계정을 그대로 씁니다. 그래서 `AGENTS.md`에서 pi의 접속 대상을 지시문의 `대상 URL:`로 제한하고, 실서비스에서는 쓰기 작업(결제·삭제·글쓰기 등)을 금지해 두었습니다.
+
 > npm 설치가 `EACCES` 또는 "cache folder contains root-owned files" 오류로 실패하면 `sudo chown -R "$(id -u):$(id -g)" ~/.npm` 로 캐시 권한을 고칩니다.
 
 ## 2. 테마(레이아웃) 설치: bercail
@@ -126,7 +141,7 @@ npm i -g @earendil-works/pi-coding-agent          # pi
    - 이름은 `<폴더명 정규화>-codex`, `<폴더명 정규화>-pi` (접두사는 `.hc/up.sh --prefix`로 확인)
    - 이미 떠 있으면 새로 띄우지 않고 폴더·역할·상태만 검사한다. 이상하면 경고하고 `exit 1`로 끝난다.
    - `up.sh`는 Claude만 실행한다. Codex·pi가 실행하면 하위 터미널이 중복으로 생긴다.
-3. "Codex에게 시켜", "pi한테 검증시켜"처럼 말하면, Claude가 `AGENTS.md`의 `[hc-task]` 형식으로 지시하고 `[hc-report]` 보고를 받아 결과를 확인한 뒤 요약해 준다.
+3. "Codex에게 시켜", "pi한테 브라우저로 확인시켜"처럼 말하면, Claude가 `AGENTS.md`의 `[hc-task]` 형식으로 지시하고 `[hc-report]` 보고를 받아 결과를 확인한 뒤 요약해 준다.
 
 상태 확인:
 

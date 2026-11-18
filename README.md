@@ -2,12 +2,12 @@
 
 **English** | [한국어](README.ko.md)
 
-A drop-in project template for running three coding agents together inside the [Herdr](https://herdr.dev) app. **Claude Code is the orchestrator.** It starts **Codex** (implementation and verification) and **pi** (helper: search, lint, running tests) as child terminals and exchanges tasks and reports with them through the `hc` CLI. Nothing depends on the project name, so you can copy the files into any project.
+A drop-in project template for running three coding agents together inside the [Herdr](https://herdr.dev) app. **Claude Code is the orchestrator.** It starts **Codex** (implementation and verification) and **pi** (browser QA tester: checks real screens with ego lite) as child terminals and exchanges tasks and reports with them through the `hc` CLI. Nothing depends on the project name, so you can copy the files into any project.
 
 ```
 You ──▶ Claude (orchestrator)
           ├─ hc send ─▶ Codex (<prefix>-codex)   implement · test · debug
-          └─ hc send ─▶ pi    (<prefix>-pi)      read · search · run checks
+          └─ hc send ─▶ pi    (<prefix>-pi)      browser QA (ego lite)
               ◀─ [hc-report] ─┘
 ```
 
@@ -36,11 +36,13 @@ When you finish, give me a table of each step's result (done / skipped / needs y
 | 3 | jq | `command -v jq` | `brew install jq` |
 | 4 | Codex CLI | `command -v codex` | `npm i -g @openai/codex@latest` |
 | 5 | pi | `command -v pi` | `npm i -g @earendil-works/pi-coding-agent` |
+| 5-1 | ego lite (pi's browser) | `command -v ego-browser && ego-browser --version` | **User action.** Have the user install the ego lite app and finish its first-run onboarding, which adds `~/.local/bin/ego-browser`. If the command isn't found, run `export PATH="$HOME/.local/bin:$PATH"` and check again |
 | 6 | npm permission error | Did step 4 or 5 fail with `EACCES` or "root-owned files"? | **Ask the user** to run `! sudo chown -R "$(id -u):$(id -g)" ~/.npm` themselves, then redo steps 4–5 |
 | 7 | Codex and pi sign-in | Ask the user whether they've signed in (the agent can't check) | **User action.** Tell them to run `codex` and `pi` once each in a separate terminal and sign in |
 | 8 | Codex permission mode | `grep -n 'dangerously-bypass' .hc/up.sh` and the approval record in section 4 of `AGENTS.md` | **Ask the user** whether to keep bypass mode or switch to the sandbox. For the sandbox, replace the launch line in `.hc/up.sh` with the one in [the section below](#️-codex-runs-in-bypass-mode) and rewrite the approval record in `AGENTS.md` section 4 to match |
 | 9 | Start child terminals | `.hc/up.sh; echo "exit=$?"` (`exit=0`, Codex and pi are `idle`) | Follow "Fixing `up.sh`" below |
 | 10 | Messaging works | Send pi a short `[hc-task]` (for example `echo ok`) and check that an `[hc-report]` comes back (format in `AGENTS.md` section 2-2) | If no report arrives, look at `hc read <target> --lines 100 --json` and report to the user |
+| 10-1 | pi's browser works | Send pi an `[hc-task]` to read `ego-browser skill` and report the title of `https://example.com` from `taskSpace("qa-smoke")` (`대상 URL: https://example.com`) | If it fails, report pi's screen to the user. Also ask whether pi's model accepts images (if not, visual checks are reported as unverified) |
 | 11 | (Optional) bercail theme | `test -f ~/.config/herdr-app/layouts/bercail.json` | **Ask the user.** If they want it, walk them through [section 2](#2-install-the-theme-layout-bercail) (they copy the install line from herdr.dev) |
 
 #### Fixing `up.sh`
@@ -64,6 +66,7 @@ If `up.sh` warns and exits with code 1, look at the terminal it names with `hc r
 | `CLAUDE.md` | Claude Code notes. Imports `@AGENTS.md` |
 | `.hc/up.sh` | Starts the Codex and pi child terminals, or checks the ones already running |
 | `.hc/reports/` | Agent reports (ignored by git) |
+| `.hc/qa/` | Screenshots and evidence from pi's browser checks (ignored by git) |
 
 ## 1. Install the tools
 
@@ -101,6 +104,18 @@ npm i -g @earendil-works/pi-coding-agent          # pi
 
 Sign in to each CLI once by running `claude`, `codex` and `pi`.
 
+### ego lite (pi's browser)
+
+pi drives a browser through the `ego-browser` CLI of the **ego lite app** (a Chromium browser built for agents). Install the app and finish its first-run onboarding; that registers `~/.local/bin/ego-browser`.
+
+```bash
+command -v ego-browser   # ~/.local/bin/ego-browser
+ego-browser --version    # e.g. ego-browser 0.6.3.17
+ego-browser skill        # agent usage guide (pi reads it before each task)
+```
+
+> ego lite uses the real accounts you're signed in to. That's why `AGENTS.md` limits pi to the `대상 URL:` (target URL) in each task and forbids writes on live services (payments, deletes, posts and so on).
+
 > If npm fails with `EACCES` or "cache folder contains root-owned files", fix the cache owner with `sudo chown -R "$(id -u):$(id -g)" ~/.npm`.
 
 ## 2. Install the theme (layout): bercail
@@ -128,7 +143,7 @@ To undo, press `ctrl-shift-l` and pick your old layout. If the window breaks, pr
    - Names are `<prefix>-codex` and `<prefix>-pi`, where the prefix is the normalized folder name (`.hc/up.sh --prefix` prints it).
    - If they are already running, it starts nothing and checks their folder, role and status. If something is wrong, it warns and exits with code 1.
    - Only Claude runs `up.sh`. If Codex or pi runs it, a duplicate set of child terminals appears.
-3. Say things like "have Codex do it" or "ask pi to verify". Claude sends an `[hc-task]` in the format from `AGENTS.md`, gets an `[hc-report]` back, checks the result and summarizes it for you.
+3. Say things like "have Codex do it" or "ask pi to check it in the browser". Claude sends an `[hc-task]` in the format from `AGENTS.md`, gets an `[hc-report]` back, checks the result and summarizes it for you.
 
 Check status:
 
