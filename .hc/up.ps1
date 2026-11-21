@@ -1,5 +1,6 @@
 ﻿# Windows용: Codex·agy 하위 터미널을 띄운다. Herdr 앱 안의 Claude 터미널에서 실행한다. (macOS는 up.sh)
-# 사용법: powershell -NoProfile -ExecutionPolicy Bypass -File .hc\up.ps1 [--prefix]
+# 사용법: powershell -NoProfile -ExecutionPolicy Bypass -File .hc\up.ps1 [--prefix | --art codex|agy]
+# --art: 이미지 생성 전용 <접두사>-art 를 그 에이전트로 함께 띄우거나 검사한다(필요할 때만).
 # 이름: <접두사>-codex, <접두사>-agy. 기존 자식은 작업 폴더·역할·상태를 확인한다. 규칙은 up.sh와 같다.
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest)
 
@@ -12,7 +13,14 @@ if ($P -eq '') { $P = 'project' }
 if ($Rest -and $Rest.Count -eq 1 -and $Rest[0] -eq '--prefix') { Write-Output $P; exit 0 }
 
 . (Join-Path $PSScriptRoot 'hc.ps1')
-if ($Rest -and $Rest.Count -gt 0) { Fail '사용법: up.ps1 [--prefix]' }
+$Art = ''
+if ($Rest -and $Rest.Count -gt 0) {
+  if ($Rest.Count -eq 2 -and $Rest[0] -eq '--art' -and $Rest[1] -in 'codex', 'agy') { $Art = $Rest[1] }
+  else { Fail '사용법: up.ps1 [--prefix | --art codex|agy]' }
+}
+# 슬롯: 이름 접미사(Role)와 에이전트 종류(Kind)
+$Slots = @([pscustomobject]@{ Role = 'codex'; Kind = 'codex' }, [pscustomobject]@{ Role = 'agy'; Kind = 'agy' })
+if ($Art) { $Slots += [pscustomobject]@{ Role = 'art'; Kind = $Art } }
 
 $Codex = Resolve-Program 'codex'; if (-not $Codex) { Fail '필요한 명령 없음: codex' }
 $Agy = Resolve-Program 'agy'; if (-not $Agy) { Fail '필요한 명령 없음: agy' }
@@ -109,24 +117,30 @@ function Test-Terminal([string]$Target, [string]$Role, [string]$Reason) {
 
 # 기존 자식에 문제가 있으면 어느 역할도 새로 띄우지 않는다.
 $Existing = @{}
-foreach ($Role in 'codex', 'agy') {
+foreach ($Slot in $Slots) {
+  $Role = $Slot.Role
   $T = @(Find-Mine "$P-$Role")
   if ($T.Count -gt 1) { Fail "$Role 하위 터미널이 여러 개입니다 ($($T -join ' ')). 하나만 남기고 다시 실행하세요." }
-  if ($T.Count -eq 1) { if (-not (Test-Terminal $T[0] $Role '재사용')) { exit 1 } }
+  if ($T.Count -eq 1) {
+    if (-not (Test-Terminal $T[0] $Slot.Kind '재사용')) {
+      if ($Role -eq 'art') { [Console]::Error.WriteLine("참고: $($T[0]) 가 다른 에이전트로 떠 있으면, 자기가 띄운 터미널이므로 hc kill $($T[0]) 후 다시 실행하세요.") }
+      exit 1
+    }
+  }
   $Existing[$Role] = if ($T.Count -eq 1) { $T[0] } else { '' }
 }
 
 $Started = @()
-function Start-Child([string]$Role, [string[]]$Argv) {
+function Start-Child([string]$Role, [string]$Kind, [string[]]$Argv) {
   $N = Select-Name "$P-$Role"
   $Run = Invoke-Hc (@('run', '--bg', '--json', '--name', $N, '--cwd', $Root) + $Label + @('--') + $Argv)
   if ($Run.Code -ne 0) { Fail "$Role 기동 실패: $($Run.Err) $($Run.Text). 이번 실행에서 이미 띄운 터미널: $(if ($Script:Started) { $Script:Started.Name -join ' ' } else { '없음' })" }
-  $Script:Started += [pscustomobject]@{ Name = $N; Role = $Role }
+  $Script:Started += [pscustomobject]@{ Name = $N; Role = $Kind }
 }
 
 # 기본은 샌드박스. .hc\local.env 값이 bypass일 때만 우회한다. --no-daemon은 hc 터미널 안에서 Codex를 유지하기 위해 필요하다.
 # 샌드박스에서도 보고(hc send)가 되도록 herdr-core 소켓이 있는 폴더를 쓰기 허용에 넣는다(소켓이 파일 경로일 때).
-if (-not $Existing['codex']) {
+function Get-CodexArgv {
   $A = @($Codex, '--no-daemon')
   if ($CodexMode -eq 'bypass') {
     $A += '--dangerously-bypass-approvals-and-sandbox'
@@ -138,11 +152,14 @@ if (-not $Existing['codex']) {
       if ($SockDir -and (Test-Path -LiteralPath $SockDir -PathType Container)) { $A += @('--add-dir', $SockDir) }
     }
   }
-  Start-Child 'codex' $A
+  return ,$A
 }
+function Get-AgyArgv { return ,@($Agy, '--settings', (Join-Path $Root '.hc\agy-settings.win.json')) }
 
-if (-not $Existing['agy']) {
-  Start-Child 'agy' @($Agy, '--settings', (Join-Path $Root '.hc\agy-settings.win.json'))
+foreach ($Slot in $Slots) {
+  if ($Existing[$Slot.Role]) { continue }
+  $Argv = if ($Slot.Kind -eq 'codex') { Get-CodexArgv } else { Get-AgyArgv }
+  Start-Child $Slot.Role $Slot.Kind $Argv
 }
 
 # 메시지에 의한 조기 반환은 역할별 총 60초 안에서 다시 기다린다.

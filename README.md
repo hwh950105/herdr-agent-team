@@ -19,6 +19,7 @@ pi: the user's personal agent (not part of development)
 | **Claude** | DB schema and migrations, auth and security, shared types / API contracts / error format, integration glue | Design, task split, integration review |
 | **Codex** | Spec'd feature APIs and service logic, external integrations, backend tests, large refactors | API behaviour and data integrity |
 | **Antigravity** | Screens, components, forms, state binding, API wiring, loading/error states, environment and build scripts | User flows verified in a real browser |
+| **art** | Image generation, on demand: a `<prefix>-art` terminal running Codex or Antigravity, chosen by the user for each image | Only writes image files to the given path |
 | **pi** | Personal work | Excluded from the development split |
 
 Shared rules (roles, ownership, reporting, safety) live in [`AGENTS.md`](AGENTS.md); Claude's dispatch procedure is in [`.hc/docs/lead.md`](.hc/docs/lead.md) and the browser QA rules in [`.hc/docs/browser-qa.md`](.hc/docs/browser-qa.md) (all in Korean).

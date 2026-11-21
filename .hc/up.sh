@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # macOS용: Codex·agy 하위 터미널을 띄운다. Herdr.app 안의 Claude 터미널에서 실행한다. (Windows는 up.ps1)
 # 이름: <접두사>-codex, <접두사>-agy. 기존 자식은 작업 폴더·역할·상태를 확인한다.
+# --art codex|agy: 이미지 생성 전용 <접두사>-art 를 그 에이전트로 함께 띄우거나 검사한다(필요할 때만).
 # 전제: hc run 은 자식 터미널에 그 터미널 자신의 HC_TERMINAL_ID/HC_TERMINAL_SOCKET 을 넣어 준다.
 #       (Codex 안에서 `echo $HC_TERMINAL_ID` 가 Codex 자기 주소인지로 확인할 수 있다)
 set -euo pipefail
@@ -14,7 +15,16 @@ if [ "${1:-}" = --prefix ] && [ "$#" -eq 1 ]; then
   printf '%s\n' "$P"
   exit 0
 fi
-[ "$#" -eq 0 ] || { echo "사용법: $0 [--prefix]" >&2; exit 1; }
+ART=
+case "$#:${1:-}" in
+  0:) ;;
+  2:--art)
+    case "$2" in codex|agy) ART=$2 ;; *) echo "사용법: $0 [--prefix | --art codex|agy]" >&2; exit 1 ;; esac ;;
+  *) echo "사용법: $0 [--prefix | --art codex|agy]" >&2; exit 1 ;;
+esac
+# 슬롯 = 이름 접미사:에이전트 종류
+SLOTS="codex:codex agy:agy"
+[ -z "$ART" ] || SLOTS="$SLOTS art:$ART"
 
 for CMD in hc jq codex agy; do
   command -v "$CMD" >/dev/null || { echo "경고: 필요한 명령 없음: $CMD" >&2; exit 1; }
@@ -127,14 +137,20 @@ check_terminal() {
 
 # 기존 자식에 문제가 있으면 어느 역할도 새로 띄우지 않는다.
 # mine 오류는 '없음'으로 보지 않고, 같은 역할 자식이 여럿이면 어느 것을 쓸지 모르므로 멈춘다.
-EXISTING_codex= EXISTING_agy=
-for ROLE in codex agy; do
+EXISTING_codex= EXISTING_agy= EXISTING_art=
+for SLOT in $SLOTS; do
+  ROLE=${SLOT%%:*} KIND=${SLOT#*:}
   T=$(mine "$P-$ROLE") || { echo "경고: $ROLE 기존 터미널 조회 실패" >&2; exit 1; }
   if [ "$(printf '%s' "$T" | grep -c .)" -gt 1 ]; then
     echo "경고: $ROLE 하위 터미널이 여러 개입니다 ($(echo $T)). 하나만 남기고 다시 실행하세요." >&2
     exit 1
   fi
-  if [ -n "$T" ]; then check_terminal "$T" "$ROLE" 재사용 || exit 1; fi
+  if [ -n "$T" ]; then
+    if ! check_terminal "$T" "$KIND" 재사용; then
+      [ "$ROLE" != art ] || echo "참고: $T 가 다른 에이전트로 떠 있으면, 자기가 띄운 터미널이므로 hc kill $T 후 다시 실행하세요." >&2
+      exit 1
+    fi
+  fi
   printf -v "EXISTING_$ROLE" '%s' "$T"
 done
 
@@ -147,9 +163,8 @@ start_failed() {
 
 # 기본은 샌드박스. 이 프로젝트에서 승인한 .hc/local.env 값이 bypass일 때만 우회한다.
 # --no-daemon은 hc 터미널 안에서 Codex를 유지하기 위해 필요하다.
-if [ -z "$EXISTING_codex" ]; then
-  N=$(pick_name "$P-codex") || start_failed codex
-  hc run --bg --name "$N" --cwd "$ROOT" ${LABEL[@]+"${LABEL[@]}"} -- sh -c '
+start_codex() { # 이름
+  hc run --bg --name "$1" --cwd "$ROOT" ${LABEL[@]+"${LABEL[@]}"} -- sh -c '
     if [ "$1" = bypass ]; then
       set -- --dangerously-bypass-approvals-and-sandbox
     else
@@ -159,17 +174,21 @@ if [ -z "$EXISTING_codex" ]; then
     fi
     exec codex --no-daemon "$@" \
       -c "shell_environment_policy.set.HC_TERMINAL_ID=\"$HC_TERMINAL_ID\"" \
-      -c "shell_environment_policy.set.HC_TERMINAL_SOCKET=\"$HC_TERMINAL_SOCKET\""' sh "$CODEX_MODE" >/dev/null || start_failed codex
-  STARTED+=("$N")
-  STARTED_ROLES+=(codex)
-fi
+      -c "shell_environment_policy.set.HC_TERMINAL_SOCKET=\"$HC_TERMINAL_SOCKET\""' sh "$CODEX_MODE" >/dev/null
+}
+start_agy() { # 이름
+  hc run --bg --name "$1" --cwd "$ROOT" ${LABEL[@]+"${LABEL[@]}"} -- agy --settings "$ROOT/.hc/agy-settings.mac.json" >/dev/null
+}
 
-if [ -z "$EXISTING_agy" ]; then
-  N=$(pick_name "$P-agy") || start_failed agy
-  hc run --bg --name "$N" --cwd "$ROOT" ${LABEL[@]+"${LABEL[@]}"} -- agy --settings "$ROOT/.hc/agy-settings.mac.json" >/dev/null || start_failed agy
+for SLOT in $SLOTS; do
+  ROLE=${SLOT%%:*} KIND=${SLOT#*:}
+  E="EXISTING_$ROLE"
+  [ -z "${!E}" ] || continue
+  N=$(pick_name "$P-$ROLE") || start_failed "$ROLE"
+  "start_$KIND" "$N" || start_failed "$ROLE"
   STARTED+=("$N")
-  STARTED_ROLES+=(agy)
-fi
+  STARTED_ROLES+=("$KIND")
+done
 
 # 메시지에 의한 조기 반환은 역할별 총 60초 안에서 다시 기다린다.
 FAIL=0

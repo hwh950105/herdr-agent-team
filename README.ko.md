@@ -19,6 +19,7 @@ pi: 사용자 개인용 (개발 분담 제외)
 | **Claude** | DB 스키마·마이그레이션, 인증·보안, 공통 타입·API 계약·오류 형식, 통합 코드 | 설계, 작업 분배, 통합 리뷰 |
 | **Codex** | 명세가 정해진 기능 API·서비스 로직, 외부 연동, 백엔드 테스트, 대규모 리팩터링 | API 동작·데이터 정합성 검증 |
 | **Antigravity** | 화면·컴포넌트·폼, 상태 바인딩, API 연결, 로딩·오류 처리, 환경 설정·빌드 스크립트 | 브라우저에서 사용자 흐름 검증 |
+| **art** | 이미지 생성. 필요할 때만 `<접두사>-art` 터미널을 띄우고, 이미지마다 Codex·Antigravity 중 무엇으로 만들지 사용자에게 묻는다 | 지정한 경로에 이미지 파일만 만든다 |
 | **pi** | 개인 작업 | 개발 분담에서 제외 |
 
 공통 규칙(역할·소유 경계, 보고, 안전)은 [`AGENTS.md`](AGENTS.md), Claude의 지휘 절차는 [`.hc/docs/lead.md`](.hc/docs/lead.md), 브라우저 검증 규칙은 [`.hc/docs/browser-qa.md`](.hc/docs/browser-qa.md)에 있습니다.
@@ -52,6 +53,7 @@ pi: 사용자 개인용 (개발 분담 제외)
 | `.hc/tasks/` | 보낸 지시 원문과 대기 기록(git 제외) |
 | `.hc/local.env` | 이 작업 환경 전용 설정(git 제외). `CODEX_MODE=bypass`가 있으면 Codex를 권한 우회 모드로 띄운다 |
 | `.hc/reports/` | 에이전트 보고서(git 제외) |
+| `.hc/art/` | art가 만든 이미지의 기본 저장 위치(git 제외) |
 | `.hc/qa/` | 브라우저 검증 스크린샷·증거(git 제외) |
 | `docs/windows-setup-issues.md` | Windows 실환경 셋팅 기록과 문제점·해결 |
 

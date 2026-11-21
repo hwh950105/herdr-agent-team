@@ -4,3 +4,4 @@
 .hc/local.env
 .hc/tasks/
 node_modules/
+.hc/art/

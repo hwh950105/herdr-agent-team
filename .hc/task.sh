@@ -89,6 +89,10 @@ cmd_send() {
     *) die "$t 상태=$s. hc read $t --lines 60 으로 화면을 확인하세요" ;;
   esac
   check_dialog "$t"
+  # art 터미널은 Codex·agy 어느 쪽이든 이미지 전용 역할임을 알린다.
+  case "$t" in
+    *-art|*-art-*) body=$(printf '[역할] 너는 이번 작업에서 이미지 생성 전용 art 에이전트다. AGENTS.md 1절의 art 금지를 따르고 이미지 파일만 만든다.\n%s' "$body") ;;
+  esac
   # 브라우저 지시는 규칙 문서를 먼저 읽게 한다(AGENTS.md에는 요약만 있다).
   if grep -q -E '^[[:space:]]*브라우저:[[:space:]]*필요' <<<"$body"; then
     body=$(printf '[브라우저 검증] 시작 전에 %s 를 끝까지 읽고 그 규칙을 따른다.\n%s' "$ROOT/.hc/docs/browser-qa.md" "$body")

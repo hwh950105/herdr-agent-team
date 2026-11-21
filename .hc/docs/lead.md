@@ -17,6 +17,7 @@
   - Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File .hc\up.ps1`
 - 하위 이름은 `<접두사>-codex`, `<접두사>-agy`. 접두사는 폴더명을 소문자 `a-z0-9_-`로 정규화한 18자 이내 값이다(`up.sh --prefix`, `up.ps1 --prefix`).
 - 하위 터미널은 `parent`가 Claude다. 프로젝트 이름이나 `where` 라벨로 찾지 않는다. Claude가 종료되면 같이 종료되고, `hc ls`는 종료된 터미널을 숨기므로(`--all`로 보임) 목록에 없으면 기동 스크립트를 다시 실행한다.
+- agy는 막 띄운 직후 잠깐 `blocked`로 보여 `exit 1`이 날 수 있다. 화면에 창이 없으면 몇 초 뒤 다시 실행한다.
 - 첫 실행은 폴더 신뢰 창, 샌드박스 Codex는 권한 선택 창(`Update Model Permissions`) 때문에 `exit 1`이 정상이다. 상태가 `idle`로 보여도 스크립트가 화면 문구로 감지해 멈춘다. 사용자가 직접 고른 뒤 다시 실행한다.
 
 ```bash
@@ -124,3 +125,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .hc\task.ps1 nudge <작업ID
 - 허용 항목은 명령 이름과 하위 명령까지만 좁혀진다(`command(node <경로>)`처럼 파일 경로로는 안 된다). 허용 규칙은 샌드박스 밖 재시도에도 적용된다.
 - 자동 모드에서는 목록 밖 명령도 agy 샌드박스와 자체 안전 판정을 거쳐 실행될 수 있으므로 허용 목록을 유일한 보호 장치로 보지 않는다.
 - 승인 창의 "always allow (Persist to settings.json)"은 전역 설정에 명령을 글자 그대로 저장한다. 고르지 않는다. 전역 설정(`~/.gemini/antigravity-cli/settings.json`)은 건드리지 않는다.
+
+## 6. 이미지 생성 (art)
+
+이미지가 필요하면 Claude가 직접 만들지 않고 이미지 전용 터미널 `<접두사>-art`에 맡긴다.
+
+1. **사용자에게 먼저 묻는다:** 이번 이미지를 Codex(OpenAI 이미지 모델)로 만들지, Antigravity(Gemini 이미지 모델)로 만들지. 이미지 작업마다 묻는다.
+2. **art 터미널을 그 에이전트로 띄운다:** macOS `.hc/up.sh --art codex|agy`, Windows `powershell -NoProfile -ExecutionPolicy Bypass -File .hc\up.ps1 --art codex|agy`. codex·agy 검사도 함께 한다. 이미 art가 다른 에이전트로 떠 있으면 스크립트가 경고하고 멈춘다. 자기가 띄운 터미널이므로 `hc kill <접두사>-art` 뒤 다시 실행한다.
+3. **작업 스크립트로 지시한다:** 대상은 `<접두사>-art`. 본문에는 용도, 크기·비율, 스타일, 장 수, 파일 형식, 저장 경로(`담당 파일:`)를 적는다. 저장 경로를 정하지 않았으면 `.hc/art/<작업ID>/`(git 제외)에 두게 하고, 쓸 이미지는 Claude가 프로젝트 폴더로 옮긴다.
+4. **결과 확인:** `wait` 0이면 보고의 파일 경로를 열어 이미지를 직접 본다. 고칠 점이 있으면 새 작업 ID로 다시 지시한다.
+
+- art는 이미지 파일만 만든다(`AGENTS.md` 1절의 art 금지). 권한 모드와 허용 목록은 고른 에이전트의 설정(5절)을 그대로 쓴다.
+- art 터미널은 계속 띄워 두어도 되고, 다른 에이전트로 바꿀 때만 종료한다.
