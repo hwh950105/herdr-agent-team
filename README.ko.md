@@ -48,6 +48,8 @@ pi: 사용자 개인용 (개발 분담 제외)
 | `AGENTS.md` | 세 에이전트가 매 세션 읽는 공통 규칙. 역할·소유 경계, 보고 원칙, 안전 규칙, 프로젝트별 설정 칸 |
 | `CLAUDE.md` | Claude Code 전용 메모. `@AGENTS.md`와 `@.hc/docs/lead.md`를 불러온다 |
 | `.hc/docs/lead.md` | Claude 전용 지휘 절차: 기동, 지시·대기·종료 코드, `hc` 명령, OS별 명령, Codex·agy 권한 설정 |
+| `.hc/docs/scope.md` | 범위 예약·검사·`verify`·수정 재지시 세부 규칙(Claude가 해당 명령을 쓸 때만 읽음) |
+| `.hc/agy-settings.local.json` | (선택, git 제외) 본인 환경에서만 넓힌 agy 허용 목록. 있으면 기동 스크립트가 기본값 대신 쓴다 |
 | `.hc/docs/browser-qa.md` | 브라우저 검증 규칙. `브라우저: 필요` 지시에는 작업 스크립트가 필독 문구를 자동으로 붙인다 |
 | `.hc/up.sh` | macOS: Codex·Antigravity 하위 터미널을 띄우거나 검사 |
 | `.hc/up.ps1` | Windows: `up.sh`와 같은 일을 PowerShell로 한다 |
@@ -194,7 +196,7 @@ API 키·인증 파일·`.env`·브라우저 프로필·민감 로그는 Git에 
 - `.hc/up.sh`(macOS)는 가짜 `hc`로 재사용·불일치·중복·주입값·대기 시간 초과 등을 모의 검사했고, 실제 Herdr.app에서 Codex·Antigravity 기동, `hc` 보고, ego lite 브라우저 검증을 확인했습니다.
 - `.hc/up.ps1`·`.hc/task.ps1`(Windows)은 Windows 11 + PowerShell 5.1 + Herdr 앱에서 기동, Codex 백엔드 작업, Antigravity 화면 구현과 Playwright 검증, 보고 파일과 `hc send` 보고를 확인했습니다. 진행 기록과 문제점·해결은 [`docs/windows-setup-issues.md`](docs/windows-setup-issues.md)에 있습니다. Windows의 `HC_TERMINAL_SOCKET`은 named pipe입니다.
 - 샌드박스 Codex의 named pipe 보고와 blocked 대기 구분은 Todo 테스트 프로젝트에서 확인했습니다([기록](docs/windows-setup-issues.md)). 새 자동화의 실제/모의/미실행 구분은 [자동화 검증 기록](docs/automation-validation.md)에 따로 남깁니다. 이번 Windows 검증이 macOS 실제 실행을 대신하지 않습니다.
-- 기록된 Windows 환경에서 핵심 테스트 27개·백엔드 43개·브라우저 두 뷰포트가 통과했습니다. 특정 환경의 결과이며 버전 간 호환성을 보장하지 않습니다. 최신 task 자동화의 실제 macOS 실행은 아직 없고 Git Bash `bash -n`은 문법 검사만 했습니다. 이미지 생성 병렬 시나리오도 미실행입니다.
+- 기록된 Windows 환경에서 핵심 테스트 27개·백엔드 43개·브라우저 두 뷰포트가 통과했습니다. 특정 환경의 결과이며 버전 간 호환성을 보장하지 않습니다. macOS에서도 실제 Codex로 범위 예약·`check`(범위 밖 변경 7)·`verify`·겹침 거부(6)·수정 재지시 3회 한도를 확인했습니다(2026-11-22, [기록](docs/automation-validation.md)). 이미지 생성 병렬 시나리오는 미실행입니다.
 - 과거 브라우저 실행은 확장 허용 목록에서 확인했습니다. 현재 축소한 기본값으로 브라우저 무인 실행을 검증한 것은 아니며 승인이 필요할 수 있습니다.
 
 ## 작업 분배와 검증

@@ -48,6 +48,8 @@ Both use the same Herdr app and `hc` commands; the message format (`[hc-task]` /
 | `AGENTS.md` | Shared rules every agent reads each session: roles, ownership, reporting, safety, per-project settings |
 | `CLAUDE.md` | Claude Code notes; imports `@AGENTS.md` and `@.hc/docs/lead.md` |
 | `.hc/docs/lead.md` | Claude-only procedure: start-up, dispatch/wait/exit codes, `hc` commands, OS differences, Codex/agy permissions |
+| `.hc/docs/scope.md` | Scope reservation/check/verify/fix-retry details (read by Claude only when using those commands) |
+| `.hc/agy-settings.local.json` | (Optional, git-ignored) your own wider agy allow list; the launchers use it instead of the default when present |
 | `.hc/docs/browser-qa.md` | Browser QA rules; the task scripts add a read-this-first line to tasks marked `브라우저: 필요` |
 | `.hc/up.sh` | macOS: start or check the Codex and Antigravity child terminals |
 | `.hc/up.ps1` | Windows: same job as `up.sh`, in PowerShell |
@@ -136,7 +138,7 @@ Keep API keys, authentication files, `.env`, browser profiles and sensitive logs
 - `.hc/up.sh` (macOS) was tested against a fake `hc` and in real Herdr.app runs (agent start-up, `hc` reports, ego lite browser checks).
 - `.hc/up.ps1` and `.hc/task.ps1` (Windows) were run on Windows 11 + PowerShell 5.1 + the Herdr app: start-up, a Codex backend task, an Antigravity UI task with Playwright checks, and report files plus `hc send` reports. Notes and fixes are in [`docs/windows-setup-issues.md`](docs/windows-setup-issues.md) (Korean). On Windows `HC_TERMINAL_SOCKET` is a named pipe.
 - Sandboxed Codex reporting over a Windows named pipe and blocked-state handling were checked in the Todo project ([record](docs/windows-setup-issues.md)). The [automation validation record](docs/automation-validation.md) separates actual, mock and unexecuted checks: 27 core tests, 43 backend tests and two browser viewports passed in the recorded Windows environment. These are environment-specific results, not a cross-version guarantee.
-- The latest task automation has not been run on real macOS; Git Bash `bash -n` was a syntax check only. Image-generation concurrency has not been tested. Earlier browser runs used an expanded allow list; unattended browser execution with the new restricted defaults has not been validated and may require approval.
+- The task automation was also run on real macOS with Codex (2026-11-22): scope reservation, `check` (out-of-scope change = 7), `verify`, overlap refusal (6) and the 3-retry fix limit. Image-generation concurrency has not been tested. Earlier browser runs used an expanded allow list; unattended browser execution with the new restricted defaults has not been validated and may require approval.
 
 ## Task dispatch and verification
 

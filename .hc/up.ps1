@@ -154,7 +154,12 @@ function Get-CodexArgv {
   }
   return ,$A
 }
-function Get-AgyArgv { return ,@($Agy, '--settings', (Join-Path $Root '.hc\agy-settings.win.json')) }
+# agy 허용 목록: git에 올리지 않는 .hc\agy-settings.local.json 이 있으면 그것을, 없으면 공개 기본값(좁은 목록)을 쓴다.
+function Get-AgyArgv {
+  $Settings = Join-Path $Root '.hc\agy-settings.local.json'
+  if (-not (Test-Path -LiteralPath $Settings)) { $Settings = Join-Path $Root '.hc\agy-settings.win.json' }
+  return ,@($Agy, '--settings', $Settings)
+}
 
 foreach ($Slot in $Slots) {
   if ($Existing[$Slot.Role]) { continue }

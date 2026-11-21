@@ -59,7 +59,7 @@
 - 자기가 만들지 않은 터미널·pane·탭은 종료하지 않는다. 기동 스크립트가 관리하지 않는 에이전트 터미널(예: pi)에는 작업을 보내지도 않는다. 그 에이전트가 이 폴더의 파일을 고치면 Claude에게 알린다. Herdr 서버를 멈추거나 재시작하지 않는다(`hc server stop|restart` 금지).
 - 승인·신뢰 창의 키를 대신 누르지 않는다(업데이트 안내처럼 무해한 창은 `esc`로 넘겨도 된다).
 - 사용자 승인 없이 권한 우회 옵션(`--dangerously-bypass-approvals-and-sandbox`, `--dangerously-skip-permissions` 등)으로 에이전트를 띄우지 않는다. Codex 우회 모드는 git에 올리지 않는 `.hc/local.env`의 `CODEX_MODE=bypass`로만 켠다(상세 `.hc/docs/lead.md`). 우회 모드의 Codex는 `담당 파일:` 범위와 승인 규칙을 더 엄격히 지킨다.
-- agy 허용 목록(`.hc/agy-settings.*.json`)을 넓힐 때는 꼭 필요한 명령만 넣는다(`command(*)` 금지). 전역 설정은 건드리지 않는다.
+- agy 허용 목록(`.hc/agy-settings.*.json`)을 넓힐 때는 꼭 필요한 명령만 넣는다(`command(*)` 금지). 전역 설정은 건드리지 않는다. 본인 환경에서만 넓힐 때는 git에 올리지 않는 `.hc/agy-settings.local.json`을 쓴다.
 
 ## 4. 필요할 때 읽는 문서
 
@@ -68,6 +68,7 @@
 | 지시·대기·기동·`hc` 명령·OS 차이·권한 설정 (Claude) | `.hc/docs/lead.md` |
 | `브라우저: 필요` 지시 수행 (Antigravity) | `.hc/docs/browser-qa.md` |
 | 이미지 생성 (Claude가 art에 맡길 때) | `.hc/docs/lead.md` 6절 |
+| 범위 예약·검사·`verify`·수정 재지시 세부 (Claude) | `.hc/docs/scope.md` |
 
 ## 5. 프로젝트별 설정
 

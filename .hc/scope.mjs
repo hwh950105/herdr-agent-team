@@ -20,7 +20,8 @@ const ROOT = process.env.HC_SCOPE_ROOT
 const TASKS = path.join(ROOT, '.hc', 'tasks');
 const REPORTS = path.join(ROOT, '.hc', 'reports');
 // 프로토콜이 쓰는 공유 산출물과 대형 폴더만 뺀다(.hc 전체를 빼지 않는다: 스크립트·문서 변경은 감시).
-const SKIP_PREFIX = ['.hc/tasks/', '.hc/reports/', '.hc/qa/', '.hc/art/'];
+// .omx/ 는 Codex 플러그인(oh-my-codex)이 차례마다 쓰는 상태 폴더라 범위 밖 변경으로 오탐된다.
+const SKIP_PREFIX = ['.hc/tasks/', '.hc/reports/', '.hc/qa/', '.hc/art/', '.omx/'];
 const SKIP_NAME = new Set(['.git', 'node_modules']);
 
 const out = (s = '') => process.stdout.write(s + '\n');
