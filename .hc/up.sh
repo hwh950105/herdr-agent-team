@@ -176,9 +176,18 @@ start_codex() { # 이름
       -c "shell_environment_policy.set.HC_TERMINAL_ID=\"$HC_TERMINAL_ID\"" \
       -c "shell_environment_policy.set.HC_TERMINAL_SOCKET=\"$HC_TERMINAL_SOCKET\""' sh "$CODEX_MODE" >/dev/null
 }
-# agy 허용 목록: git에 올리지 않는 .hc/agy-settings.local.json 이 있으면 그것을, 없으면 공개 기본값(좁은 목록)을 쓴다.
+# agy 허용 목록: 사용자 설정 폴더의 파일이 있으면 그것을, 없으면 공개 기본값(좁은 목록)을 쓴다.
+# 넓힌 목록은 에이전트가 쓸 수 없는 프로젝트 밖(사용자 설정 폴더)에만 둔다. 프로젝트 안 파일은 샌드박스 에이전트도 고칠 수 있다.
 AGY_SETTINGS="$ROOT/.hc/agy-settings.mac.json"
-[ -f "$ROOT/.hc/agy-settings.local.json" ] && AGY_SETTINGS="$ROOT/.hc/agy-settings.local.json"
+AGY_USER="${XDG_CONFIG_HOME:-$HOME/.config}/hc-agents/agy-settings.mac.json"
+if [ -f "$AGY_USER" ]; then
+  if grep -q -E 'command\(\*\)|regex:\.\*\)' "$AGY_USER"; then
+    echo "경고: $AGY_USER 에 전체 허용 항목(command(*) 등)이 있어 쓰지 않습니다. 기본 목록으로 띄웁니다." >&2
+  else
+    AGY_SETTINGS=$AGY_USER
+    echo "참고: agy 허용 목록으로 사용자 설정 $AGY_USER 를 씁니다." >&2
+  fi
+fi
 start_agy() { # 이름
   hc run --bg --name "$1" --cwd "$ROOT" ${LABEL[@]+"${LABEL[@]}"} -- agy --settings "$AGY_SETTINGS" >/dev/null
 }

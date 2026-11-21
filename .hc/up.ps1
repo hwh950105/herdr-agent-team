@@ -154,10 +154,20 @@ function Get-CodexArgv {
   }
   return ,$A
 }
-# agy 허용 목록: git에 올리지 않는 .hc\agy-settings.local.json 이 있으면 그것을, 없으면 공개 기본값(좁은 목록)을 쓴다.
+# agy 허용 목록: 사용자 설정 폴더(%APPDATA%\hc-agents)의 파일이 있으면 그것을, 없으면 공개 기본값(좁은 목록)을 쓴다.
+# 넓힌 목록은 에이전트가 쓸 수 없는 프로젝트 밖에만 둔다. 프로젝트 안 파일은 샌드박스 에이전트도 고칠 수 있다.
 function Get-AgyArgv {
-  $Settings = Join-Path $Root '.hc\agy-settings.local.json'
-  if (-not (Test-Path -LiteralPath $Settings)) { $Settings = Join-Path $Root '.hc\agy-settings.win.json' }
+  $Settings = Join-Path $Root '.hc\agy-settings.win.json'
+  $UserFile = Join-Path $env:APPDATA 'hc-agents\agy-settings.win.json'
+  if ($env:APPDATA -and (Test-Path -LiteralPath $UserFile)) {
+    $Text = [IO.File]::ReadAllText($UserFile)
+    if ($Text -match 'command\(\*\)|regex:\.\*\)') {
+      [Console]::Error.WriteLine("경고: $UserFile 에 전체 허용 항목(command(*) 등)이 있어 쓰지 않습니다. 기본 목록으로 띄웁니다.")
+    } else {
+      $Settings = $UserFile
+      [Console]::Error.WriteLine("참고: agy 허용 목록으로 사용자 설정 $UserFile 를 씁니다.")
+    }
+  }
   return ,@($Agy, '--settings', $Settings)
 }
 

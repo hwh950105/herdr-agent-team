@@ -144,7 +144,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .hc\task.ps1 nudge <작업ID
 - 권한 우회 옵션 없이 띄우고, 기동 스크립트가 `agy --settings .hc/agy-settings.<mac|win>.json`으로 이 세션에만 허용 목록을 넘긴다. 목록을 바꾸면 agy를 다시 띄워야 적용된다.
   - macOS 기본: `command(hc send)`만 허용한다.
   - Windows 기본: `command(regex:hc send .*)`만 허용한다. PowerShell에서 따옴표·한글이 섞인 보고 명령을 위해 기존 정규식 형식을 유지한다.
-- **본인 환경에서 넓히기:** 기동 스크립트는 `.hc/agy-settings.local.json`이 있으면 공개 기본값 대신 그 파일을 쓴다. 이 파일은 git에 올라가지 않는다(`.hc/*.local.json`). 사용자가 승인 없는 브라우저 검증을 원하면 여기에 넣는다. 예: macOS `command(hc send)`, `command(ego-browser)`, `read_file(/Applications/ego lite.app)` / Windows `command(regex:hc send .*)`, `command(regex:node .*)`. 바꾸면 agy를 다시 띄운다.
+- **본인 환경에서 넓히기:** 기동 스크립트는 사용자 설정 폴더의 `hc-agents/agy-settings.<mac|win>.json`(macOS `~/.config/hc-agents/`, Windows `%APPDATA%\hc-agents\`)이 있으면 공개 기본값 대신 그 파일을 쓰고, 쓴다는 사실을 화면에 알린다. 프로젝트 밖에 두는 이유는 샌드박스 에이전트가 프로젝트 안 파일을 고쳐 권한을 넓힐 수 있기 때문이다. `command(*)`나 `regex:.*` 같은 전체 허용이 있으면 쓰지 않는다. 예: macOS `command(hc send)`, `command(ego-browser)`, `read_file(/Applications/ego lite.app)` / Windows `command(regex:hc send .*)`, `command(regex:node .*)`. 바꾸면 agy를 다시 띄운다. 에이전트에게 이 파일을 만들거나 고치게 하지 않는다.
 - 브라우저/Node 명령은 기본 자동 허용하지 않는다. 승인 창이 나오면 사용자에게 알리고 직접 선택하게 한다. 반복 검증을 위해 사용자가 명시적으로 승인한 경우에만 프로젝트의 위 설정 파일에 필요한 항목을 추가할 수 있다. Windows의 `command(regex:node .*)`는 임의 Node 코드 실행을 허용하므로 신뢰할 수 있는 프로젝트·검사한 스크립트에만 선택한다. macOS의 `command(ego-browser)`는 로그인된 실제 브라우저에 접근하며, 앱 읽기 경로도 자기 설치 위치를 확인해 필요한 범위만 추가한다. `command(*)`·권한 우회 옵션·전역 설정 자동 변경은 금지한다.
 - 허용 항목은 명령 이름과 하위 명령까지만 좁혀진다(`command(node <경로>)`처럼 파일 경로로는 안 된다). 허용 규칙은 샌드박스 밖 재시도에도 적용된다.
 - 자동 모드에서는 목록 밖 명령도 agy 샌드박스와 자체 안전 판정을 거쳐 실행될 수 있으므로 허용 목록을 유일한 보호 장치로 보지 않는다.

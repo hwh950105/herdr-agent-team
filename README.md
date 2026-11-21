@@ -49,7 +49,7 @@ Both use the same Herdr app and `hc` commands; the message format (`[hc-task]` /
 | `CLAUDE.md` | Claude Code notes; imports `@AGENTS.md` and `@.hc/docs/lead.md` |
 | `.hc/docs/lead.md` | Claude-only procedure: start-up, dispatch/wait/exit codes, `hc` commands, OS differences, Codex/agy permissions |
 | `.hc/docs/scope.md` | Scope reservation/check/verify/fix-retry details (read by Claude only when using those commands) |
-| `.hc/agy-settings.local.json` | (Optional, git-ignored) your own wider agy allow list; the launchers use it instead of the default when present |
+| `~/.config/hc-agents/agy-settings.mac.json`, `%APPDATA%\hc-agents\agy-settings.win.json` | (Optional, outside the project) your own wider agy allow list; the launchers announce and use it instead of the default. Kept outside the project so sandboxed agents cannot edit it |
 | `.hc/docs/browser-qa.md` | Browser QA rules; the task scripts add a read-this-first line to tasks marked `브라우저: 필요` |
 | `.hc/up.sh` | macOS: start or check the Codex and Antigravity child terminals |
 | `.hc/up.ps1` | Windows: same job as `up.sh`, in PowerShell |
