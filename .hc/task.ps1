@@ -6,6 +6,9 @@
 # wait 종료 코드: 0 보고 있음 / 2 보고 누락(차례는 끝남) / 3 시간 초과(아직 작업 중, 완료 아님)
 #                 4 점검 필요(blocked·종료 등. 보고 파일이 있어도 대상이 blocked면 4) / 1 사용법·조회 오류
 # send·nudge 종료 코드: 0 보냄(차례 시작 확인) / 5 미제출(Enter를 2번 더 눌러도 차례가 시작되지 않음) / 1 오류
+#                      6 보내지 않음(담당 파일 범위 겹침, --fix-of 수정 한도 3회 초과 등)
+#   task.ps1 send ... --fix-of <이전ID>   같은 문제의 수정 재지시. 계열별 최대 3회(scope.mjs)
+#   task.ps1 check|verify|release|claim|status ...   범위 검사·verified 기록 (.hc\scope.mjs, lead.md 3절)
 # 보고 메시지(hc send)는 빠질 수 있으므로 완료 판단은 보고 파일(.hc\reports\<작업ID>.md)로 한다.
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$A)
 
@@ -73,12 +76,26 @@ function Read-Env([string]$Id) {
 function Write-Env([string]$Id, [string]$Target, [int]$Turn, [int]$Nudges) {
   [IO.File]::WriteAllText((Join-Path $Tasks "$Id.env"), "TARGET=$Target`nTURN=$Turn`nNUDGES=$Nudges`n", $Utf8)
 }
+# node 실행: stdout 줄을 돌려주고 stderr 는 그대로 화면에 낸다. $LASTEXITCODE 는 node 의 종료 코드.
+# (PowerShell 5.1 은 Stop 모드에서 외부 프로그램의 stderr 를 오류로 바꿔 멈추므로 잠시 Continue 로 둔다.)
+function Invoke-Node([string[]]$NArgs) {
+  $Safe = @($NArgs | ForEach-Object { Protect-Arg $_ })
+  $Prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+  try { $Raw = & node @Safe 2>&1 } finally { $ErrorActionPreference = $Prev }
+  $Code = $LASTEXITCODE
+  $Lines = @()
+  foreach ($L in @($Raw)) { if ($L -is [System.Management.Automation.ErrorRecord]) { [Console]::Error.WriteLine("$L") } elseif ($null -ne $L) { $Lines += "$L" } }
+  $global:LASTEXITCODE = $Code
+  return $Lines
+}
 function Test-Report([string]$Rp) { (Test-Path -LiteralPath $Rp) -and (Get-Item -LiteralPath $Rp).Length -gt 0 }
 
 $Cmd = if ($A -and $A.Count -ge 1) { $A[0] } else { '' }
 switch ($Cmd) {
   'send' {
-    if ($A.Count -ne 4) { Fail '사용법: task.ps1 send <대상> <작업ID> <지시문파일>' }
+    $FixOf = $null
+    if ($A.Count -eq 6 -and $A[4] -eq '--fix-of') { $FixOf = $A[5]; Test-Id $FixOf }
+    elseif ($A.Count -ne 4) { Fail '사용법: task.ps1 send <대상> <작업ID> <지시문파일> [--fix-of <이전작업ID>]' }
     $T = $A[1]; $Id = $A[2]; $BodyFile = $A[3]
     Test-Id $Id
     if ((Test-Path -LiteralPath (Join-Path $Tasks "$Id.env")) -or (Test-Path -LiteralPath (Join-Path $Reports "$Id.md"))) { Fail "이미 쓴 작업ID입니다: $Id (새 작업ID를 쓰세요)" }
@@ -89,8 +106,19 @@ switch ($Cmd) {
     if ($S -eq 'working') { Fail "$T 작업 중입니다. 먼저 끝나기를 기다리세요" }
     if ($S -ne 'idle' -and $S -ne 'done') { Fail "$T 상태=$S. hc read $T --lines 60 으로 화면을 확인하세요" }
     $Dlg = Find-Dialog $T; if ($Dlg) { Fail "$T 화면에 '$Dlg' 창이 떠 있습니다. 보내면 본문이 창에 입력됩니다. 사용자가 직접 고른 뒤 다시 보내세요" }
-    # art 터미널은 Codex·agy 어느 쪽이든 이미지 전용 역할임을 알린다.
-    if ($T -match '-art(-.*)?$') { $Body = "[역할] 너는 이번 작업에서 이미지 생성 전용 art 에이전트다. AGENTS.md 1절의 art 금지를 따르고 이미지 파일만 만든다.`n$Body" }
+    # 쓰기 범위 예약(겹침·수정 횟수 검사, 기준선 저장). 거부되면 보내지 않는다. 수정 재지시면 머리말을 붙인다.
+    $Scope = Join-Path $PSScriptRoot 'scope.mjs'
+    if (Get-Command node -ErrorAction SilentlyContinue) {
+      $SArgs = @($Scope, 'start', $Id, $T, (Resolve-Path -LiteralPath $BodyFile).ProviderPath)
+      if ($FixOf) { $SArgs += @('--fix-of', $FixOf) }
+      $Head = Invoke-Node $SArgs
+      if ($LASTEXITCODE -ne 0) { Write-Output "보내지 않음(scope 거부, 코드 $LASTEXITCODE): 위 메시지를 확인하세요."; exit $LASTEXITCODE }
+      if ($Head) { $Body = "$(@($Head) -join "`n")`n$Body" }
+    } elseif ($FixOf) { Fail 'node 가 없어 --fix-of 수정 횟수 검사를 할 수 없습니다' }
+    else { [Console]::Error.WriteLine('경고: node 없음. 쓰기 범위 검사 미적용으로 보냅니다.') }
+    # art 터미널은 Codex·agy 어느 쪽이든 이미지 전용 역할임을 알린다. 주소(tN)로 받아도 이름으로 판정한다.
+    $TName = "$(Get-Field (Get-Terminal $T) 'name')"
+    if ($T -match '-art(-.*)?$' -or $TName -match '-art(-.*)?$') { $Body = "[역할] 너는 이번 작업에서 이미지 생성 전용 art 에이전트다. AGENTS.md 1절의 art 금지를 따르고 이미지 파일만 만든다.`n$Body" }
     # 브라우저 지시는 규칙 문서를 먼저 읽게 한다(AGENTS.md에는 요약만 있다).
     if ($Body -match '(?m)^\s*브라우저:\s*필요') { $Body = "[브라우저 검증] 시작 전에 $(Join-Path $Root '.hc\docs\browser-qa.md') 를 끝까지 읽고 그 규칙을 따른다.`n$Body" }
     $Msg = "[hc-task] id=$Id from=$Me`n$Body`n$(Get-Footer $Id)"
@@ -167,5 +195,14 @@ switch ($Cmd) {
     Write-Output "다시 보냄($($N + 1)/2): $T id=$Id. 기다리기: task.ps1 wait $Id"
     exit 0
   }
-  default { Fail '사용법: task.ps1 send <대상> <작업ID> <지시문파일> | wait <작업ID> [초] | nudge <작업ID>' }
+  { $_ -in 'check', 'verify', 'release', 'claim', 'status' } {
+    # 범위 검사·검증 기록은 scope.mjs 하나가 맡는다(macOS task.sh 와 같은 구현).
+    if (-not (Get-Command node -ErrorAction SilentlyContinue)) { Fail 'node 가 필요합니다' }
+    $Rest = if ($A.Count -gt 1) { $A[1..($A.Count - 1)] } else { @() }
+    $Out = Invoke-Node (@((Join-Path $PSScriptRoot 'scope.mjs'), $Cmd) + $Rest)
+    $Code = $LASTEXITCODE
+    if ($Out) { $Out | ForEach-Object { Write-Output $_ } }
+    exit $Code
+  }
+  default { Fail '사용법: task.ps1 send <대상> <작업ID> <지시문파일> [--fix-of <이전ID>] | wait <작업ID> [초] | nudge <작업ID> | check|verify|release|claim|status ...' }
 }

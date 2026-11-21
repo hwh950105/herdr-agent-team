@@ -6,6 +6,9 @@
 # wait 종료 코드: 0 보고 있음 / 2 보고 누락(차례는 끝남) / 3 시간 초과(아직 작업 중, 완료 아님)
 #                 4 점검 필요(blocked·종료 등. 보고 파일이 있어도 대상이 blocked면 4) / 1 사용법·조회 오류
 # send·nudge 종료 코드: 0 보냄(차례 시작 확인) / 5 미제출(Enter를 2번 더 눌러도 차례가 시작되지 않음) / 1 오류
+#                      6 보내지 않음(담당 파일 범위 겹침, --fix-of 수정 한도 3회 초과 등)
+#   task.sh send <대상> <작업ID> --fix-of <이전ID> < 본문   같은 문제의 수정 재지시. 계열별 최대 3회(scope.mjs)
+#   task.sh check|verify|release|claim|status ...           범위 검사·verified 기록 (.hc/scope.mjs, lead.md 3절)
 # 보고 메시지(hc send)는 빠질 수 있으므로 완료 판단은 보고 파일(.hc/reports/<작업ID>.md)로 한다.
 set -euo pipefail
 
@@ -77,8 +80,10 @@ send_msg() { # 대상 메시지 → 전송 후 turn 출력
 }
 
 cmd_send() {
-  [ $# -eq 2 ] || die "사용법: task.sh send <대상> <작업ID> < 지시문본문"
-  local t=$1 id=$2 body s turn msg before
+  local fixof=""
+  if [ $# -eq 4 ] && [ "$3" = "--fix-of" ]; then fixof=$4; check_id "$fixof"
+  elif [ $# -ne 2 ]; then die "사용법: task.sh send <대상> <작업ID> [--fix-of <이전작업ID>] < 지시문본문"; fi
+  local t=$1 id=$2 body s turn msg before head name
   check_id "$id"
   [ ! -e "$TASKS/$id.env" ] && [ ! -e "$REPORTS/$id.md" ] || die "이미 쓴 작업ID입니다: $id (새 작업ID를 쓰세요)"
   body=$(cat)
@@ -90,9 +95,23 @@ cmd_send() {
     *) die "$t 상태=$s. hc read $t --lines 60 으로 화면을 확인하세요" ;;
   esac
   check_dialog "$t"
-  # art 터미널은 Codex·agy 어느 쪽이든 이미지 전용 역할임을 알린다.
-  case "$t" in
-    *-art|*-art-*) body=$(printf '[역할] 너는 이번 작업에서 이미지 생성 전용 art 에이전트다. AGENTS.md 1절의 art 금지를 따르고 이미지 파일만 만든다.\n%s' "$body") ;;
+  # 쓰기 범위 예약(겹침·수정 횟수 검사, 기준선 저장). 거부되면 보내지 않는다. 수정 재지시면 머리말을 붙인다.
+  if command -v node >/dev/null; then
+    printf '%s
+' "$body" > "$TASKS/$id.body"
+    if [ -n "$fixof" ]; then
+      head=$(node "$ROOT/.hc/scope.mjs" start "$id" "$t" "$TASKS/$id.body" --fix-of "$fixof") || { s=$?; echo "보내지 않음(scope 거부, 코드 $s): 위 메시지를 확인하세요."; exit "$s"; }
+    else
+      head=$(node "$ROOT/.hc/scope.mjs" start "$id" "$t" "$TASKS/$id.body") || { s=$?; echo "보내지 않음(scope 거부, 코드 $s): 위 메시지를 확인하세요."; exit "$s"; }
+    fi
+    [ -z "$head" ] || body=$(printf '%s
+%s' "$head" "$body")
+  elif [ -n "$fixof" ]; then die "node 가 없어 --fix-of 수정 횟수 검사를 할 수 없습니다"
+  else echo "경고: node 없음. 쓰기 범위 검사 미적용으로 보냅니다." >&2; fi
+  # art 터미널은 Codex·agy 어느 쪽이든 이미지 전용 역할임을 알린다. 주소(tN)로 받아도 이름으로 판정한다.
+  name=$(hc get "$t" 2>/dev/null | jq -r '.name // empty' || true)
+  case "$t $name" in
+    *-art|*-art" "*|*-art-*) body=$(printf '[역할] 너는 이번 작업에서 이미지 생성 전용 art 에이전트다. AGENTS.md 1절의 art 금지를 따르고 이미지 파일만 만든다.\n%s' "$body") ;;
   esac
   # 브라우저 지시는 규칙 문서를 먼저 읽게 한다(AGENTS.md에는 요약만 있다).
   if grep -q -E '^[[:space:]]*브라우저:[[:space:]]*필요' <<<"$body"; then
@@ -182,5 +201,9 @@ case "${1:-}" in
   send) shift; cmd_send "$@" ;;
   wait) shift; cmd_wait "$@" ;;
   nudge) shift; cmd_nudge "$@" ;;
-  *) die "사용법: task.sh send <대상> <작업ID> < 본문 | wait <작업ID> [초] | nudge <작업ID>" ;;
+  check|verify|release|claim|status)
+    # 범위 검사·검증 기록은 scope.mjs 하나가 맡는다(Windows task.ps1 과 같은 구현).
+    command -v node >/dev/null || die "node 가 필요합니다"
+    exec node "$ROOT/.hc/scope.mjs" "$@" ;;
+  *) die "사용법: task.sh send <대상> <작업ID> [--fix-of <이전ID>] < 본문 | wait <작업ID> [초] | nudge <작업ID> | check|verify|release|claim|status ..." ;;
 esac
