@@ -1,7 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "command(hc)",
+      "command(hc send)",
       "command(ego-browser)",
       "read_file(/Applications/ego lite.app)"
     ]

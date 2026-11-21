@@ -143,7 +143,7 @@
 - **권한 우회 옵션:** 사용자 승인 없이 권한 우회 옵션(`--dangerously-bypass-approvals-and-sandbox`, `--dangerously-skip-permissions` 등)으로 에이전트를 띄우지 않는다.
   - 기동 스크립트는 Codex를 기본으로 샌드박스 모드로 띄운다. 권한 우회 모드는 git에 올리지 않는 `.hc/local.env`에 `CODEX_MODE=bypass`가 있을 때만 쓴다. 이 파일은 사용자 승인을 받은 뒤에만 만든다.
   - 승인은 그 작업 환경에만 적용된다. `.hc/local.env`는 git에 올라가지 않으므로 복사한 프로젝트는 샌드박스 모드로 시작한다. 승인 기록은 6절에 적는다.
-  - Antigravity는 권한 우회 옵션 없이 띄우되, 기동 스크립트가 `agy --settings .hc/agy-settings.<mac|win>.json`으로 이 세션에만 허용 목록을 넘긴다(macOS: `hc`, `ego-browser`, ego lite 앱 폴더 읽기 / Windows: `hc`, `node`, `npx`). 그래서 보고·브라우저 명령에서 승인 창이 뜨지 않는다. 전역 설정(`~/.gemini/antigravity-cli/settings.json`)은 건드리지 않으며, 목록을 넓힐 때는 꼭 필요한 명령·경로만 추가한다(`command(*)` 금지).
+  - Antigravity는 권한 우회 옵션 없이 띄우되, 기동 스크립트가 `agy --settings .hc/agy-settings.<mac|win>.json`으로 이 세션에만 허용 목록을 넘긴다(macOS: `hc send`, `ego-browser`, ego lite 앱 폴더 읽기 / Windows: `hc send`, `node`). 그래서 보고·브라우저 명령에서 승인 창이 뜨지 않는다. 허용 항목은 명령 이름과 하위 명령까지만 좁혀진다(`command(hc send)`는 되고 `command(node <경로>)`처럼 파일 경로로는 안 된다). 자동 모드에서는 목록 밖 명령도 agy 샌드박스와 자체 안전 판정을 거쳐 실행될 수 있으므로 허용 목록을 유일한 보호 장치로 보지 않는다. 전역 설정(`~/.gemini/antigravity-cli/settings.json`)은 건드리지 않으며, 목록을 넓힐 때는 꼭 필요한 명령·경로만 추가한다(`command(*)` 금지).
   - 우회 모드에서는 `담당 파일:` 범위, 삭제·push·배포 전 승인 같은 규칙이 도구로 강제되지 않는다. Codex는 범위를 더 엄격히 지키고, Claude는 Codex의 변경을 실제 파일로 확인한다.
 
 ---

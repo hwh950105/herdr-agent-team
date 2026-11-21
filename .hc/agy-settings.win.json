@@ -1,9 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "command(hc)",
-      "command(node)",
-      "command(npx)"
+      "command(hc send)",
+      "command(node)"
     ]
   }
 }
