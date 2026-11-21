@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { spawn, spawnSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseScope, overlaps, scan } from './scope.mjs';
 
 const SCOPE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'scope.mjs');
@@ -351,4 +351,116 @@ test('Unicode 정규화로 같은 이름이 되는 별개 파일은 조용히 �
     }
     assert.equal(t.start('NFC', 'src/').code, 8);
   } finally { t.cleanup(); }
+});
+
+test('읽는 도중 계속 바뀌는 파일은 검사를 멈추지 않고 unstable 표식으로 기록한다', (context) => {
+  const t = project();
+  try {
+    t.write('data/app.db-wal', 'wal');
+    const target = path.join(t.root, 'data/app.db-wal');
+    const originalStat = fs.statSync;
+    let n = 0;
+    context.mock.method(fs, 'statSync', (file, ...args) => {
+      const st = originalStat(file, ...args);
+      return file === target ? { ...st, nlink: st.nlink, size: st.size, ctimeMs: st.ctimeMs, mtimeMs: st.mtimeMs + n++ } : st;
+    });
+    const snap = scan(t.root);
+    assert.match(snap['data/app.db-wal'], /^unstable:/);
+    assert.match(snap['src/a.js'], /^[0-9a-f]{40}$/);
+  } finally { context.mock.restoreAll(); t.cleanup(); }
+});
+
+// 크기·mtime 은 고정하고 ctime 만 stat 마다 바꾸는 preload. 매 scan 의 unstable 표식이 같은 문자열이 된다(표식 충돌).
+function collidingProject(rel) {
+  const t = project();
+  t.write(rel, 'aa');
+  const target = path.join(t.root, rel);
+  const preload = path.join(t.root, '.hc/tasks/unstable-preload.mjs');
+  fs.writeFileSync(preload, `import fs from 'node:fs';
+const target = ${JSON.stringify(target)}; const orig = fs.statSync; let n = 0;
+fs.statSync = (p, ...a) => { const s = orig(p, ...a); if (String(p) !== target) return s;
+  return Object.assign(Object.create(Object.getPrototypeOf(s)), s, { mtimeMs: 10, ctimeMs: n++ }); };
+`);
+  const run = (...args) => {
+    const r = spawnSync(process.execPath, ['--import', pathToFileURL(preload).href, SCOPE, ...args], { env: { ...process.env, HC_SCOPE_ROOT: t.root }, encoding: 'utf8' });
+    return { code: r.status, out: r.stdout, err: r.stderr };
+  };
+  const start = (id, scopeLine) => {
+    const b = path.join(t.root, '.hc/tasks', `${id}.body`);
+    fs.writeFileSync(b, `목표: x\n담당 파일: ${scopeLine}\n완료 조건: y\n`);
+    return run('start', id, 't9', b);
+  };
+  return { ...t, run, start };
+}
+
+test('unstable 표식이 같은 문자열이어도 미소유 변경을 놓치지 않는다', () => {
+  const t = collidingProject('data/app.log');
+  try {
+    assert.equal(t.start('U', 'src/a.js').code, 0);
+    assert.match(JSON.parse(fs.readFileSync(path.join(t.root, '.hc/tasks/U.scope.json'), 'utf8')).baseline['data/app.log'], /^unstable:2:10$/);
+    t.write('data/app.log', 'bb');
+    const r = t.run('check', 'U');
+    assert.equal(r.code, 7, r.out + r.err);
+    assert.match(r.out, /data\/app\.log/);
+  } finally { t.cleanup(); }
+});
+
+test('unstable 파일이 담긴 verified 는 status 에서 항상 이후 변경됨으로 표시한다', () => {
+  const t = collidingProject('data/app.log');
+  try {
+    assert.equal(t.run('claim', 'V', 'data/').code, 0);
+    const v = t.run('verify', 'V', '근거');
+    assert.equal(v.code, 0, v.out + v.err);
+    assert.match(v.out, /경고: 계속 바뀌던 파일 data\/app\.log/);
+    t.write('data/app.log', 'cc');
+    assert.match(t.run('status').out, /V\t[^\n]*verified\*/);
+  } finally { t.cleanup(); }
+});
+
+test('해제된 작업의 unstable 표식과 같아도 이후 변경을 그 작업 변경으로 면제하지 않는다', () => {
+  const t = collidingProject('data/app.log');
+  try {
+    assert.equal(t.start('T', 'src/a.js').code, 0);
+    assert.equal(t.run('claim', 'P', 'data/').code, 0);
+    assert.equal(t.run('release', 'P', '테스트').code, 0);
+    t.write('data/app.log', 'dd');
+    const r = t.run('check', 'T');
+    assert.equal(r.code, 7, r.out + r.err);
+    assert.doesNotMatch(r.out, /다른 작업 범위\(P\)/);
+  } finally { t.cleanup(); }
+});
+
+test('실행 중 프로세스가 쓰는 파일이 있어도 send 예약은 되고, 미예약이면 미소유 변경 7·예약하면 0', async () => {
+  const t = project();
+  const log = path.join(t.root, 'data/app.log');
+  t.write('data/app.log', 'x'.repeat(1 << 20));
+  const writer = spawn(process.execPath, ['-e',
+    `const fs=require('fs');const p=process.argv[1];setInterval(()=>{for(let i=0;i<50;i++)fs.appendFileSync(p,'line\\n')},1)`,
+    log], { stdio: 'ignore' });
+  let exited = false;
+  const exit = new Promise((r) => { writer.once('exit', () => { exited = true; r(); }); writer.once('error', () => { exited = true; r(); }); });
+  // 고정 sleep 대신 실제로 파일이 커질 때까지 기다린다(제한 10초, writer 가 먼저 끝나면 즉시 실패).
+  const grows = async () => {
+    const s0 = fs.statSync(log).size;
+    for (const end = Date.now() + 10000; Date.now() < end;) {
+      if (exited) throw new Error('writer 가 먼저 종료됨');
+      if (fs.statSync(log).size > s0) return;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    throw new Error('writer 가 10초 안에 쓰지 않음');
+  };
+  try {
+    await grows();
+    assert.equal(t.start('W1', 'src/a.js').code, 0);
+    await grows();
+    assert.equal(t.run('check', 'W1').code, 7);
+    assert.equal(t.run('release', 'W1', 'test').code, 0);
+    assert.equal(t.start('W2', 'data/').code, 0);
+    await grows();
+    assert.equal(t.run('check', 'W2').code, 0);
+  } finally {
+    if (!exited) writer.kill();
+    await Promise.race([exit, new Promise((r) => setTimeout(r, 5000).unref())]);
+    t.cleanup();
+  }
 });

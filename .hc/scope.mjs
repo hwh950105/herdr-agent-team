@@ -79,6 +79,31 @@ const ownedSnapshot = (rec, now) => Object.fromEntries(
 );
 
 // ---------- 파일 스냅샷 ----------
+// 읽는 도중 바뀐 파일(실행 중 서버의 DB WAL·로그 등)은 몇 번 다시 읽고, 끝내 고정되지 않으면
+// 'unstable:' 표식을 기록한다. 표식은 내용 해시가 아니므로 same() 비교에서 항상 '다름'이다
+// (예약하지 않았으면 미소유 변경 7, verified 는 항상 별표, 종료 작업 면제 불가).
+// 검사 전체를 멈추지 않아 다른 파일의 판정과 send 가 막히지 않는다.
+const READ_TRIES = 3;
+export const isUnstable = (h) => typeof h === 'string' && h.startsWith('unstable:');
+const same = (a, b) => a === b && !isUnstable(a);
+function hashStable(a, r) {
+  let after;
+  for (let i = 0; i < READ_TRIES; i++) {
+    const before = fs.statSync(a);
+    if (before.nlink > 1) throw new Refuse(`하드 링크 파일은 소유 경계를 검사할 수 없습니다: ${r}`, 8);
+    const hash = crypto.createHash('sha1');
+    const fd = fs.openSync(a, 'r');
+    try {
+      const buffer = Buffer.allocUnsafe(512 * 1024);
+      let size;
+      while ((size = fs.readSync(fd, buffer, 0, buffer.length, null)) > 0) hash.update(buffer.subarray(0, size));
+    } finally { fs.closeSync(fd); }
+    after = fs.statSync(a);
+    if (before.size === after.size && before.mtimeMs === after.mtimeMs && before.ctimeMs === after.ctimeMs) return hash.digest('hex');
+  }
+  return `unstable:${after.size}:${after.mtimeMs}`;
+}
+
 export function scan(root = ROOT) {
   const snap = {};
   const seen = new Map();
@@ -96,18 +121,7 @@ export function scan(root = ROOT) {
       if (d.isSymbolicLink()) throw new Refuse(`링크 대상의 변경은 검사할 수 없습니다: ${r}`, 8);
       else if (d.isDirectory()) walk(a, r);
       else if (d.isFile()) {
-        const before = fs.statSync(a);
-        if (before.nlink > 1) throw new Refuse(`하드 링크 파일은 소유 경계를 검사할 수 없습니다: ${r}`, 8);
-        const hash = crypto.createHash('sha1');
-        const fd = fs.openSync(a, 'r');
-        try {
-          const buffer = Buffer.allocUnsafe(512 * 1024);
-          let size;
-          while ((size = fs.readSync(fd, buffer, 0, buffer.length, null)) > 0) hash.update(buffer.subarray(0, size));
-        } finally { fs.closeSync(fd); }
-        const after = fs.statSync(a);
-        if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) throw new Refuse(`검사 도중 파일이 변경됐습니다: ${r}`, 8);
-        snap[key] = hash.digest('hex');
+        snap[key] = hashStable(a, r);
       }
     }
   };
@@ -199,13 +213,13 @@ export function classify(id) {
   const rows = [];
   for (const k of [...keys].sort()) {
     const a = rec.baseline[k], b = now[k];
-    if (a === b) continue;
+    if (same(a, b)) continue;
     const kindOf = a === undefined ? '추가' : b === undefined ? '삭제' : '변경';
     let where;
     if (rec.scope.status === 'applied' && covers(rec.scope.entries, k)) where = 'own';
     else {
       const o = others.filter(({ r, ended }) => covers(r.scope.entries, k) &&
-        (!ended || (Object.hasOwn(ended.hashes || {}, k) && ended.hashes[k] === (now[k] ?? null))))
+        (!ended || (Object.hasOwn(ended.hashes || {}, k) && same(ended.hashes[k], now[k] ?? null))))
         .map(({ r }) => r.id);
       where = o.length ? `other:${o.join(',')}` : 'unowned';
     }
@@ -244,7 +258,8 @@ function cmdVerify(id, note) {
   if (code !== 0) throw new Refuse(`범위 검사가 통과하지 않아 verified 로 기록하지 않습니다.`, code);
   const hashes = ownedSnapshot(rec, classified.now);
   writeJson(f(id, 'verified.json'), { at: new Date().toISOString(), note: note || '', scopeChecked: code === 0, hashes });
-  out(`verified: ${id}`);
+  const unstable = Object.keys(hashes).filter((k) => isUnstable(hashes[k]));
+  out(`verified: ${id}${unstable.length ? ` (경고: 계속 바뀌던 파일 ${unstable.join(', ')} 은 내용 해시가 없어 status 에서 항상 변경됨으로 표시)` : ''}`);
   return 0;
 }
 
@@ -259,7 +274,7 @@ function cmdStatus() {
       const v = readJson(f(r.id, 'verified.json'));
       const current = ownedSnapshot(r, now);
       const keys = new Set([...Object.keys(current), ...Object.keys(v?.hashes || {})]);
-      if (!v || [...keys].some((k) => current[k] !== v.hashes[k])) st = 'verified*(이후 변경됨)';
+      if (!v || [...keys].some((k) => !same(current[k], v.hashes[k]))) st = 'verified*(이후 변경됨)';
     }
     const fix = r.attempt ? `${r.attempt}/${MAX_FIX} ←${r.fixOf}` : '-';
     const sc = r.scope.status === 'applied' ? r.scope.entries.map((e) => e.p + (e.dir ? '/' : '')).join(', ') || '(없음)' : '미적용';
