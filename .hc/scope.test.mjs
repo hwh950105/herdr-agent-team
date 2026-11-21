@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { parseScope, overlaps } from './scope.mjs';
+import { parseScope, overlaps, scan } from './scope.mjs';
 
 const SCOPE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'scope.mjs');
 
@@ -20,7 +20,10 @@ function project() {
   };
   const body = (id, scopeLine) => { const p = path.join(root, '.hc/tasks', `${id}.body`); fs.writeFileSync(p, `목표: x\n담당 파일: ${scopeLine}\n완료 조건: y\n`); return p; };
   const start = (id, scopeLine, ...extra) => run('start', id, 't9', body(id, scopeLine), ...extra);
-  const sent = (id) => fs.writeFileSync(path.join(root, '.hc/tasks', `${id}.env`), 'TARGET=t9\nTURN=1\nNUDGES=0\n');
+  const sent = (id) => {
+    fs.writeFileSync(path.join(root, '.hc/tasks', `${id}.env`), 'TARGET=t9\nTURN=1\nNUDGES=0\n');
+    assert.equal(run('sent', id).code, 0);
+  };
   const report = (id, st) => fs.writeFileSync(path.join(root, '.hc/reports', `${id}.md`), `[hc-report] id=${id} status=${st}\n요약: x\n`);
   const write = (p, s = 'changed') => { fs.mkdirSync(path.dirname(path.join(root, p)), { recursive: true }); fs.writeFileSync(path.join(root, p), s); };
   return { root, run, start, sent, report, write, cleanup: () => fs.rmSync(root, { recursive: true, force: true }) };
@@ -148,6 +151,106 @@ test('범위 해석 불가면 경고 후 보내기는 허용, check 는 판정 �
     assert.match(r.err, /소유 검사 미적용/);
     t.write('public/index.html');
     assert.equal(t.run('check', 'U').code, 8);
+    t.report('U', 'done');
+    assert.equal(t.run('verify', 'U').code, 8);
+    assert.equal(fs.existsSync(path.join(t.root, '.hc/tasks/U.verified.json')), false);
+  } finally { t.cleanup(); }
+});
+
+test('수정 지시를 옛 작업에서 다시 분기하여 횟수를 우회할 수 없다', () => {
+  const t = project();
+  try {
+    t.start('F', 'src/a.js'); t.sent('F'); t.report('F', 'failed');
+    assert.equal(t.start('F1', 'src/a.js', '--fix-of', 'F').code, 0);
+    t.sent('F1'); t.report('F1', 'failed');
+    assert.equal(t.start('branch', 'src/a.js', '--fix-of', 'F').code, 6);
+    assert.equal(t.start('F2', 'src/a.js', '--fix-of', 'F1').code, 0);
+  } finally { t.cleanup(); }
+});
+
+test('보고 전에는 다른 대상으로 같은 계열의 수정 지시를 만들 수 없다', () => {
+  const t = project();
+  try {
+    t.start('F', 'src/a.js'); t.sent('F');
+    assert.equal(t.start('F1', 'src/a.js', '--fix-of', 'F').code, 6);
+  } finally { t.cleanup(); }
+});
+
+test('병렬 작업을 순서대로 verify해도 먼저 완료된 작업의 정상 변경을 위반으로 보지 않는다', () => {
+  const t = project();
+  try {
+    t.start('BE', 'src/'); t.start('FE', 'public/');
+    t.write('src/a.js'); t.write('public/index.html');
+    t.report('BE', 'done'); t.report('FE', 'done');
+    assert.equal(t.run('verify', 'BE').code, 0);
+    const result = t.run('verify', 'FE');
+    assert.equal(result.code, 0, result.out + result.err);
+  } finally { t.cleanup(); }
+});
+
+test('완료된 다른 작업의 검증 이후 변경은 면제하지 않는다', () => {
+  const t = project();
+  try {
+    t.start('A', 'src/'); t.start('B', 'public/');
+    t.write('src/a.js'); t.report('A', 'done');
+    assert.equal(t.run('verify', 'A').code, 0);
+    t.write('src/a.js', '검증 후 다시 변경'); t.report('B', 'done');
+    assert.equal(t.run('check', 'B').code, 7);
+    assert.equal(t.run('verify', 'B').code, 7);
+  } finally { t.cleanup(); }
+});
+
+test('해제 시점의 정확한 변경만 병렬 작업에서 면제한다', () => {
+  const t = project();
+  try {
+    t.start('A', 'src/'); t.start('B', 'public/');
+    t.write('src/a.js');
+    assert.equal(t.run('release', 'A', '확인 후 인수').code, 0);
+    assert.equal(t.run('check', 'B').code, 0);
+    t.write('src/a.js', '해제 후 다시 변경');
+    assert.equal(t.run('check', 'B').code, 7);
+  } finally { t.cleanup(); }
+});
+
+test('수정 지시의 전송 실패는 부모 예약을 해제하지 않고 재시도 기준선을 보존한다', () => {
+  const t = project();
+  try {
+    t.start('F', 'src/a.js'); t.sent('F'); t.report('F', 'failed');
+    assert.equal(t.start('F1', 'src/a.js', '--fix-of', 'F').code, 0);
+    assert.equal(fs.existsSync(path.join(t.root, '.hc/tasks/F.released.json')), false);
+    t.write('README.md');
+    assert.equal(t.start('F1', 'src/a.js', '--fix-of', 'F').code, 0);
+    assert.equal(t.run('check', 'F1').code, 7);
+    t.sent('F1');
+    assert.equal(fs.existsSync(path.join(t.root, '.hc/tasks/F.released.json')), true);
+  } finally { t.cleanup(); }
+});
+
+test('verified 이후 담당 디렉터리에 새 파일이 생겨도 변경됨으로 표시한다', () => {
+  const t = project();
+  try {
+    t.start('V', 'src/'); t.report('V', 'done');
+    assert.equal(t.run('verify', 'V').code, 0);
+    t.write('src/new.js');
+    assert.match(t.run('status').out, /V\tt9\tverified\*/);
+  } finally { t.cleanup(); }
+});
+
+test('다른 작업 ID의 보고를 현재 작업의 done으로 인정하지 않는다', () => {
+  const t = project();
+  try {
+    t.start('V', 'src/');
+    t.write('.hc/reports/V.md', '[hc-report] id=OTHER status=done');
+    assert.equal(t.run('verify', 'V').code, 6);
+  } finally { t.cleanup(); }
+});
+
+test('경로 별칭으로 소유 중복을 우회할 수 없다', () => {
+  const t = project();
+  try {
+    assert.equal(t.start('A', 'src/').code, 0);
+    assert.equal(t.start('B', '././src/a.js').code, 6);
+    assert.equal(parseScope('담당 파일: src/*', t.root).status, 'unparsed');
   } finally { t.cleanup(); }
 });
 
@@ -163,12 +266,89 @@ test('claim: Claude 직접 작업도 예약되어 겹침 검사·check 대상이
   } finally { t.cleanup(); }
 });
 
-test('보낸 작업ID로 다시 start 하면 거부, 보내기 전이면 덮어쓰기 허용', () => {
+test('보낸 작업ID로 다시 start 하면 거부, 보내기 전 재시도는 기준선을 보존한다', () => {
   const t = project();
   try {
     assert.equal(t.start('R', 'src/a.js').code, 0);
+    t.write('README.md');
     assert.equal(t.start('R', 'src/a.js').code, 0);        // 전송 실패 후 같은 ID로 재시도
+    assert.equal(t.run('check', 'R').code, 7);
+    assert.equal(t.start('R', 'public/').code, 1);
     t.sent('R');
     assert.equal(t.start('R', 'src/a.js').code, 1);
+  } finally { t.cleanup(); }
+});
+
+test('verified claim ID를 새 범위로 재사용하지 않는다', () => {
+  const t = project();
+  try {
+    assert.equal(t.run('claim', 'C', 'src/a.js').code, 0);
+    assert.equal(t.run('verify', 'C').code, 0);
+    assert.equal(t.run('claim', 'C', 'public/').code, 1);
+  } finally { t.cleanup(); }
+});
+
+test('scope 직접 실행도 상위 경로 작업ID를 거부한다', () => {
+  const t = project();
+  try {
+    assert.equal(t.run('claim', '../escape', 'src/').code, 1);
+  } finally { t.cleanup(); }
+});
+
+test('디렉터리 열거 및 파일 읽기 오류를 빈 스냅샷으로 숨기지 않는다', (context) => {
+  const t = project();
+  try {
+    const originalRead = fs.readdirSync;
+    context.mock.method(fs, 'readdirSync', (dir, ...args) => {
+      if (dir === path.join(t.root, 'src')) throw new Error('주입한 디렉터리 읽기 실패');
+      return originalRead(dir, ...args);
+    });
+    assert.throws(() => scan(t.root), /디렉터리 읽기 실패/);
+    context.mock.restoreAll();
+    const originalOpen = fs.openSync;
+    context.mock.method(fs, 'openSync', (file, ...args) => {
+      if (file === path.join(t.root, 'src/a.js')) throw new Error('주입한 파일 읽기 실패');
+      return originalOpen(file, ...args);
+    });
+    assert.throws(() => scan(t.root), /파일 읽기 실패/);
+  } finally { context.mock.restoreAll(); t.cleanup(); }
+});
+
+test('손상된 소유 기록을 무시하고 겹치는 작업을 시작하지 않는다', () => {
+  const t = project();
+  try {
+    t.start('A', 'src/');
+    t.write('.hc/tasks/A.scope.json', '{broken');
+    assert.equal(t.start('B', 'src/').code, 8);
+  } finally { t.cleanup(); }
+});
+
+test('링크를 통한 소유 범위 우회는 판정 불가로 중단한다', () => {
+  const t = project();
+  try {
+    fs.symlinkSync(path.join(t.root, 'src'), path.join(t.root, 'alias'), process.platform === 'win32' ? 'junction' : 'dir');
+    assert.equal(parseScope('담당 파일: alias/a.js', t.root).status, 'unparsed');
+    assert.equal(t.start('L', 'src/').code, 8);
+  } finally { t.cleanup(); }
+});
+
+test('하드 링크 파일도 검사 가능한 일반 파일로 취급하지 않는다', () => {
+  const t = project();
+  try {
+    fs.linkSync(path.join(t.root, 'src/a.js'), path.join(t.root, 'public/alias.js'));
+    assert.equal(t.start('L', 'src/').code, 8);
+  } finally { t.cleanup(); }
+});
+
+test('Unicode 정규화로 같은 이름이 되는 별개 파일은 조용히 덮어쓰지 않는다', (context) => {
+  const t = project();
+  try {
+    t.write('src/\u00e9.js', '첫 번째 파일');
+    t.write('src/e\u0301.js', '두 번째 파일');
+    if (fs.readdirSync(path.join(t.root, 'src')).filter((name) => name.normalize('NFC') === '\u00e9.js').length < 2) {
+      context.skip('파일시스템이 Unicode 정규화 별칭을 같은 파일로 취급함');
+      return;
+    }
+    assert.equal(t.start('NFC', 'src/').code, 8);
   } finally { t.cleanup(); }
 });

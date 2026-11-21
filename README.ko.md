@@ -51,6 +51,7 @@ pi: 사용자 개인용 (개발 분담 제외)
 | `.hc/agy-settings.mac.json`, `.hc/agy-settings.win.json` | Antigravity 세션 전용 허용 목록. 보고·브라우저 명령의 승인 창을 없앤다 |
 | `.hc/task.sh`, `.hc/task.ps1` | 작업 지시 보내기·기다리기·보고 확인. 보고 메시지가 빠져도 보고 파일로 완료를 판단하고, 누락이면 이어서 하라고 다시 보낸다 |
 | `.hc/tasks/` | 보낸 지시 원문과 대기 기록(git 제외) |
+| `.hc/scope.mjs`, `.hc/scope.test.mjs` | Node 18+ 공통 소유 범위 예약·변경 검사·수정 지시 한도·verified 기록과 모의 테스트(외부 패키지 없음) |
 | `.hc/local.env` | 이 작업 환경 전용 설정(git 제외). `CODEX_MODE=bypass`가 있으면 Codex를 권한 우회 모드로 띄운다 |
 | `.hc/reports/` | 에이전트 보고서(git 제외) |
 | `.hc/art/` | art가 만든 이미지의 기본 저장 위치(git 제외) |
@@ -129,7 +130,7 @@ PowerShell 기준입니다. Claude Code는 **Herdr 앱 안의 터미널**에서 
 
 1. 이 폴더에서 **Herdr 앱 안의 터미널**로 Claude Code를 실행한다.
 2. Claude에게 일을 시키면 Claude가 설계·계약을 정하고, 필요할 때 기동 스크립트로 Codex·Antigravity를 띄워 `[hc-task]`로 나눠 맡긴다.
-3. "Codex에게 시켜", "Antigravity한테 화면 만들고 브라우저로 확인시켜"처럼 말해도 된다. Claude가 보고를 받아 실제 파일·스크린샷을 확인한 뒤 요약해 준다.
+3. "Codex에게 시켜", "Antigravity한테 화면 만들고 브라우저로 확인시켜"처럼 말해도 된다. 작은 작업은 단독 처리하고, 독립 범위는 병렬로 맡긴다. 보고 후 실제 파일·테스트·스크린샷을 확인하며 실패 시 같은 작업 계열에 수정 지시를 최대 3회 보낸다. 범위 검사와 `check`/`verify` 사용법은 [지휘 절차](.hc/docs/lead.md)를 따른다. `wait` 성공만으로 기능 완료를 판정하지 않는다.
 4. 새 프로젝트에 복사했으면 `AGENTS.md` 5절 "프로젝트별 설정"에 기술 스택과 담당 영역을 채운다.
 
 상태 확인:
@@ -164,4 +165,4 @@ macOS의 Herdr.app에서는 커뮤니티 레이아웃 **bercail**(작성자 simo
 
 - `.hc/up.sh`(macOS)는 가짜 `hc`로 재사용·불일치·중복·주입값·대기 시간 초과 등을 모의 검사했고, 실제 Herdr.app에서 Codex·Antigravity 기동, `hc` 보고, ego lite 브라우저 검증을 확인했습니다.
 - `.hc/up.ps1`·`.hc/task.ps1`(Windows)은 Windows 11 + PowerShell 5.1 + Herdr 앱에서 기동, Codex 백엔드 작업, Antigravity 화면 구현과 Playwright 검증, 보고 파일과 `hc send` 보고를 확인했습니다. 진행 기록과 문제점·해결은 [`docs/windows-setup-issues.md`](docs/windows-setup-issues.md)에 있습니다. Windows의 `HC_TERMINAL_SOCKET`은 named pipe입니다.
-- 아직 확인하지 못한 것: 샌드박스 모드 Codex 안에서 named pipe로 `hc send`가 되는지(Full Access로만 확인), 권한 창 감지·Codex argv 판정의 Windows 실환경 동작(macOS에서만 확인).
+- 샌드박스 Codex의 named pipe 보고와 blocked 대기 구분은 Todo 테스트 프로젝트에서 확인했습니다([기록](docs/windows-setup-issues.md)). 새 자동화의 실제/모의/미실행 구분은 [자동화 검증 기록](docs/automation-validation.md)에 따로 남깁니다. 이번 Windows 검증이 macOS 실제 실행을 대신하지 않습니다.

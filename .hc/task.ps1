@@ -126,6 +126,10 @@ switch ($Cmd) {
     $Before = Get-Field (Get-Terminal $T) 'turn'; $Before = if ($null -eq $Before) { 0 } else { [int]$Before }
     $Turn = Send-Msg $T $Msg
     Write-Env $Id $T $Turn 0
+    if (Test-Path -LiteralPath (Join-Path $Tasks "$Id.scope.json")) {
+      $null = Invoke-Node @($Scope, 'sent', $Id)
+      if ($LASTEXITCODE -ne 0) { Write-Output '전송은 시도됐으나 예약 확정에 실패했습니다. 중복 전송하지 말고 기록과 화면을 확인하세요.'; exit $LASTEXITCODE }
+    }
     if (-not (Confirm-Submitted $T $Before)) {
       Write-Output "미제출: $T 에 본문은 보냈지만 차례가 시작되지 않았습니다. hc read $T --lines 40 으로 입력란을 확인하세요."
       exit 5

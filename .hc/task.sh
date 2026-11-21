@@ -122,6 +122,9 @@ cmd_send() {
   before=$(turn_of "$t")
   turn=$(send_msg "$t" "$msg")
   printf 'TARGET=%s\nTURN=%s\nNUDGES=0\n' "$t" "$turn" > "$TASKS/$id.env"
+  if [ -f "$TASKS/$id.scope.json" ]; then
+    node "$ROOT/.hc/scope.mjs" sent "$id" || { s=$?; echo '전송은 시도됐으나 예약 확정에 실패했습니다. 중복 전송하지 말고 기록과 화면을 확인하세요.'; exit "$s"; }
+  fi
   confirm_submitted "$t" "$before" || { echo "미제출: $t 에 본문은 보냈지만 차례가 시작되지 않았습니다. hc read $t --lines 40 으로 입력란을 확인하세요."; exit 5; }
   echo "보냄: $t id=$id (turn=$turn). 기다리기: .hc/task.sh wait $id"
 }

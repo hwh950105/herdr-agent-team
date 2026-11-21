@@ -51,6 +51,7 @@ Both use the same Herdr app and `hc` commands; the message format (`[hc-task]` /
 | `.hc/agy-settings.*.json` | Per-session allow list passed to `agy --settings`, so report and browser commands run without approval prompts |
 | `.hc/task.sh`, `.hc/task.ps1` | Send a task, wait for it, and verify the report file; re-prompt the agent if it stopped without reporting |
 | `.hc/tasks/` | Sent task texts and wait state (git-ignored) |
+| `.hc/scope.mjs`, `.hc/scope.test.mjs` | Node 18+ 공통 소유 범위 예약·변경 검사·수정 지시 한도·verified 기록과 모의 테스트(외부 패키지 없음) |
 | `.hc/local.env` | Local-only settings (git-ignored). `CODEX_MODE=bypass` runs Codex without its sandbox |
 | `.hc/reports/`, `.hc/qa/` | Agent reports and browser evidence (git-ignored) |
 | `docs/windows-setup-issues.md` | Windows setup log, issues and fixes (Korean) |
@@ -106,4 +107,8 @@ The launchers start Codex **sandboxed by default** (`-s workspace-write -a never
 
 - `.hc/up.sh` (macOS) was tested against a fake `hc` and in real Herdr.app runs (agent start-up, `hc` reports, ego lite browser checks).
 - `.hc/up.ps1` and `.hc/task.ps1` (Windows) were run on Windows 11 + PowerShell 5.1 + the Herdr app: start-up, a Codex backend task, an Antigravity UI task with Playwright checks, and report files plus `hc send` reports. Notes and fixes are in [`docs/windows-setup-issues.md`](docs/windows-setup-issues.md) (Korean). On Windows `HC_TERMINAL_SOCKET` is a named pipe.
-- Not yet confirmed: `hc send` from a sandboxed Codex on Windows (only tested with Full Access), and the dialog detection / Codex argv check on a real Windows machine (tested on macOS only).
+- 샌드박스 Codex의 named pipe 보고와 blocked 대기 구분은 Todo 테스트 프로젝트에서 확인했습니다([기록](docs/windows-setup-issues.md)). 새 자동화의 실제/모의/미실행 구분은 [자동화 검증 기록](docs/automation-validation.md)에 남깁니다. macOS에서 새 task 자동화의 실제 실행은 별도 검증이 필요합니다.
+
+## 작업 분배와 검증
+
+작은 작업은 단독 처리하고 독립 범위는 병렬로 맡깁니다. Node 18+가 있으면 전송 전에 쓰기 범위를 예약·비교합니다. `wait`는 보고 수신이며, 실파일·테스트 확인 후 `check`와 `verify`로 지휘자의 검증을 기록합니다. 실패 수정은 `--fix-of`로 같은 계열에 최대 3회 지시합니다. 경로 문법·명령·공유 폴더의 변경자 식별 한계는 [지휘 절차](.hc/docs/lead.md)를 따릅니다.
