@@ -21,7 +21,7 @@ pi: 사용자 개인용 (개발 분담 제외)
 | **Antigravity** | 화면·컴포넌트·폼, 상태 바인딩, API 연결, 로딩·오류 처리, 환경 설정·빌드 스크립트 | 브라우저에서 사용자 흐름 검증 |
 | **pi** | 개인 작업 | 개발 분담에서 제외 |
 
-자세한 규칙(소유 경계, 지시·보고 형식, 안전 규칙)은 [`AGENTS.md`](AGENTS.md)에 있습니다.
+공통 규칙(역할·소유 경계, 보고, 안전)은 [`AGENTS.md`](AGENTS.md), Claude의 지휘 절차는 [`.hc/docs/lead.md`](.hc/docs/lead.md), 브라우저 검증 규칙은 [`.hc/docs/browser-qa.md`](.hc/docs/browser-qa.md)에 있습니다.
 
 ## macOS와 Windows의 차이
 
@@ -40,8 +40,10 @@ pi: 사용자 개인용 (개발 분담 제외)
 
 | 파일 | 내용 |
 |---|---|
-| `AGENTS.md` | 세 에이전트 공통 규칙. 역할·소유 경계, 지시·보고 형식, 브라우저 검증·안전 규칙, 명령 부록(A: `hc` 공통, B: Windows 차이), 프로젝트별 설정 칸 |
-| `CLAUDE.md` | Claude Code 전용 메모. `@AGENTS.md`를 불러온다 |
+| `AGENTS.md` | 세 에이전트가 매 세션 읽는 공통 규칙(약 75줄). 역할·소유 경계, 보고 원칙, 안전 규칙, 프로젝트별 설정 칸 |
+| `CLAUDE.md` | Claude Code 전용 메모. `@AGENTS.md`와 `@.hc/docs/lead.md`를 불러온다 |
+| `.hc/docs/lead.md` | Claude 전용 지휘 절차: 기동, 지시·대기·종료 코드, `hc` 명령, OS별 명령, Codex·agy 권한 설정 |
+| `.hc/docs/browser-qa.md` | 브라우저 검증 규칙. `브라우저: 필요` 지시에는 작업 스크립트가 필독 문구를 자동으로 붙인다 |
 | `.hc/up.sh` | macOS: Codex·Antigravity 하위 터미널을 띄우거나 검사 |
 | `.hc/up.ps1` | Windows: `up.sh`와 같은 일을 PowerShell로 한다 |
 | `.hc/hc.ps1` | Windows: `up.ps1`·`task.ps1`이 함께 쓰는 공용 함수(직접 실행하지 않음) |
@@ -81,7 +83,7 @@ README.ko.md의 "에이전트용 셋팅 절차"에서 지금 OS에 맞는 표를
 | 6 | Antigravity CLI | `agy --version` | **사용자 조치.** Antigravity 앱을 설치하고 앱 안내에 따라 `agy`를 PATH에 등록. 없으면 `export PATH="$HOME/.local/bin:$PATH"` 후 재확인 |
 | 7 | ego lite | `ego-browser --version` | **사용자 조치.** ego lite 앱을 설치하고 첫 실행 안내를 마친다 |
 | 8 | 로그인 | `agy models` (모델 목록). Codex는 사용자에게 묻는다 | **사용자 조치.** 별도 터미널에서 `codex`, `agy`를 한 번씩 실행해 로그인 |
-| 9 | Codex 권한 모드 | `cat .hc/local.env 2>/dev/null` | 기본은 샌드박스라 조치 없음. **사용자가 원할 때만** 승인 후 `CODEX_MODE=bypass`를 적고 `AGENTS.md` 6절에 승인 기록을 남긴다 |
+| 9 | Codex 권한 모드 | `cat .hc/local.env 2>/dev/null` | 기본은 샌드박스라 조치 없음. **사용자가 원할 때만** 승인 후 `CODEX_MODE=bypass`를 적고 `AGENTS.md` 5절에 승인 기록을 남긴다 |
 | 10 | 하위 터미널 기동 | `.hc/up.sh; echo "exit=$?"` (`exit=0`, 둘 다 `idle`) | 아래 "문제 해결". **첫 실행은** Codex·agy가 폴더 신뢰 창을 띄워 `exit=1`로 끝나는 것이 정상이다. 사용자가 두 터미널에서 직접 고른 뒤 다시 실행한다 |
 | 11 | 통신 확인 | Antigravity에게 `[hc-task]`로 `echo "$HC_TERMINAL_ID"` 같은 짧은 작업을 보내고 `[hc-report]`가 오는지 본다 | `up.sh`가 `.hc/agy-settings.mac.json` 허용 목록을 넘기므로 승인 창이 뜨지 않아야 한다. 뜨면 화면을 사용자에게 보고하고, 필요한 명령을 허용 목록에 추가할지 묻는다 |
 | 12 | 브라우저 확인 | Antigravity에게 `브라우저: 필요`, `대상 URL: https://example.com`(읽기 전용)으로 페이지 제목(`page.title()`이 `Example Domain`)을 확인하고 스크린샷을 `.hc/qa/<작업ID>/`에 저장하게 한다 | 실패하면 화면을 사용자에게 보고 |
@@ -103,7 +105,7 @@ PowerShell 기준입니다. Claude Code는 **Herdr 앱 안의 터미널**에서 
 | 8 | 로그인 | `agy models` (모델 목록). Codex는 사용자에게 묻는다 | **사용자 조치.** 별도 터미널에서 `codex`, `agy`를 한 번씩 실행해 로그인 |
 | 9 | Codex 권한 모드 | `Get-Content .hc\local.env -ErrorAction SilentlyContinue` | macOS 9단계와 같다. 사용자가 승인했으면 `Set-Content -Encoding ASCII .hc\local.env 'CODEX_MODE=bypass'` |
 | 10 | 하위 터미널 기동 | `powershell -NoProfile -ExecutionPolicy Bypass -File .hc\up.ps1; "exit=$LASTEXITCODE"` (`exit=0`, 둘 다 `idle`) | 아래 "문제 해결". **첫 실행은** 폴더 신뢰 창 때문에 `exit=1`이 정상이다. 샌드박스 모드의 Codex는 이어서 권한 선택 창(`Update Model Permissions`)을 띄우는데, 상태가 `idle`로 보여도 스크립트가 화면 문구로 감지해 멈춘다. 사용자가 직접 고른다. Full Access를 고를 거라면 처음부터 9단계의 `CODEX_MODE=bypass`로 띄운다 |
-| 11 | 통신 확인 | Antigravity에게 `task.ps1 send`로 `$env:HC_TERMINAL_ID` 출력 같은 짧은 작업을 보내고(`AGENTS.md` 부록 B-2) `task.ps1 wait`가 0인지 본다 | `hc read <접두사>-agy --lines 100`으로 화면을 보고 사용자에게 보고. 승인 창이 뜨면 `.hc/agy-settings.win.json`에 필요한 명령을 추가할지 사용자에게 묻는다 |
+| 11 | 통신 확인 | Antigravity에게 `task.ps1 send`로 `$env:HC_TERMINAL_ID` 출력 같은 짧은 작업을 보내고(`.hc/docs/lead.md` 3절) `task.ps1 wait`가 0인지 본다 | `hc read <접두사>-agy --lines 100`으로 화면을 보고 사용자에게 보고. 승인 창이 뜨면 `.hc/agy-settings.win.json`에 필요한 명령을 추가할지 사용자에게 묻는다 |
 | 12 | 브라우저 확인 | Antigravity에게 `브라우저: 필요`, `대상 URL: https://example.com`으로 Playwright 스크립트를 `.hc/qa/<작업ID>/`에 만들어 `page.title()`이 `Example Domain`인지 확인하고 스크린샷을 저장하게 한다. 본문에는 그 문구가 없을 수 있으므로 제목으로 판정한다 | 실패하면 화면을 사용자에게 보고 |
 
 #### 기동 스크립트 문제 해결 (공통)
@@ -126,7 +128,7 @@ PowerShell 기준입니다. Claude Code는 **Herdr 앱 안의 터미널**에서 
 1. 이 폴더에서 **Herdr 앱 안의 터미널**로 Claude Code를 실행한다.
 2. Claude에게 일을 시키면 Claude가 설계·계약을 정하고, 필요할 때 기동 스크립트로 Codex·Antigravity를 띄워 `[hc-task]`로 나눠 맡긴다.
 3. "Codex에게 시켜", "Antigravity한테 화면 만들고 브라우저로 확인시켜"처럼 말해도 된다. Claude가 보고를 받아 실제 파일·스크린샷을 확인한 뒤 요약해 준다.
-4. 새 프로젝트에 복사했으면 `AGENTS.md` 6절 "프로젝트별 설정"에 기술 스택과 담당 영역을 채운다.
+4. 새 프로젝트에 복사했으면 `AGENTS.md` 5절 "프로젝트별 설정"에 기술 스택과 담당 영역을 채운다.
 
 상태 확인:
 

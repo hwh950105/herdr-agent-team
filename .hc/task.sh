@@ -89,6 +89,10 @@ cmd_send() {
     *) die "$t 상태=$s. hc read $t --lines 60 으로 화면을 확인하세요" ;;
   esac
   check_dialog "$t"
+  # 브라우저 지시는 규칙 문서를 먼저 읽게 한다(AGENTS.md에는 요약만 있다).
+  if grep -q -E '^[[:space:]]*브라우저:[[:space:]]*필요' <<<"$body"; then
+    body=$(printf '[브라우저 검증] 시작 전에 %s 를 끝까지 읽고 그 규칙을 따른다.\n%s' "$ROOT/.hc/docs/browser-qa.md" "$body")
+  fi
   msg=$(printf '[hc-task] id=%s from=%s\n%s\n%s' "$id" "$ME" "$body" "$(footer "$id")")
   printf '%s\n' "$msg" > "$TASKS/$id.md"   # 원문 보관: 다시 보낼 때 상대가 다시 읽을 수 있게
   before=$(turn_of "$t")

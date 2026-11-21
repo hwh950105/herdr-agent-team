@@ -88,6 +88,8 @@ switch ($Cmd) {
     if ($S -eq 'working') { Fail "$T 작업 중입니다. 먼저 끝나기를 기다리세요" }
     if ($S -ne 'idle' -and $S -ne 'done') { Fail "$T 상태=$S. hc read $T --lines 60 으로 화면을 확인하세요" }
     $Dlg = Find-Dialog $T; if ($Dlg) { Fail "$T 화면에 '$Dlg' 창이 떠 있습니다. 보내면 본문이 창에 입력됩니다. 사용자가 직접 고른 뒤 다시 보내세요" }
+    # 브라우저 지시는 규칙 문서를 먼저 읽게 한다(AGENTS.md에는 요약만 있다).
+    if ($Body -match '(?m)^\s*브라우저:\s*필요') { $Body = "[브라우저 검증] 시작 전에 $(Join-Path $Root '.hc\docs\browser-qa.md') 를 끝까지 읽고 그 규칙을 따른다.`n$Body" }
     $Msg = "[hc-task] id=$Id from=$Me`n$Body`n$(Get-Footer $Id)"
     [IO.File]::WriteAllText((Join-Path $Tasks "$Id.md"), $Msg, $Utf8)   # 원문 보관: 다시 보낼 때 상대가 다시 읽을 수 있게
     $Before = Get-Field (Get-Terminal $T) 'turn'; $Before = if ($null -eq $Before) { 0 } else { [int]$Before }

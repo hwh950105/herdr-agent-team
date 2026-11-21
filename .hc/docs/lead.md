@@ -1,0 +1,126 @@
+# 지휘 절차 (Claude 전용)
+
+`AGENTS.md`의 규칙에 더해 Claude가 지시·기동·검증할 때 쓰는 절차다. `CLAUDE.md`가 이 파일을 불러온다.
+
+## 1. 리뷰와 검증 흐름
+
+1. 설계·계약을 정하고 작업을 나눠 지시한다(`담당 파일:` 명시). 함께 쓰는 API는 계약 파일을 먼저 둔다.
+2. Codex는 백엔드를 구현하고 테스트로, Antigravity는 UI를 구현하고 브라우저로 검증한다.
+3. 결과는 **실제 파일과 diff로** 리뷰하고 통합한다. 보고만 보고 완료로 판단하지 않는다.
+4. Claude가 직접 쓴 핵심 코드(스키마·인증·계약)는 Codex에게 교차 리뷰를 맡긴다.
+5. 화면 동작이 바뀌는 작업은 Antigravity의 브라우저 검증 보고까지 확인한 뒤 완료를 알린다. 중요한 판정은 스크린샷(`.hc/qa/<작업ID>/`)을 직접 열어 다시 본다.
+
+## 2. 기동
+
+- 위임 전에 기동 스크립트를 한 번 실행한다. 정상인 하위 터미널이 있으면 새로 띄우지 않고 폴더·역할·상태만 검사한다. 이상하면 경고 후 `exit 1`.
+  - macOS: `.hc/up.sh`
+  - Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File .hc\up.ps1`
+- 하위 이름은 `<접두사>-codex`, `<접두사>-agy`. 접두사는 폴더명을 소문자 `a-z0-9_-`로 정규화한 18자 이내 값이다(`up.sh --prefix`, `up.ps1 --prefix`).
+- 하위 터미널은 `parent`가 Claude다. 프로젝트 이름이나 `where` 라벨로 찾지 않는다. Claude가 종료되면 같이 종료되고, `hc ls`는 종료된 터미널을 숨기므로(`--all`로 보임) 목록에 없으면 기동 스크립트를 다시 실행한다.
+- 첫 실행은 폴더 신뢰 창, 샌드박스 Codex는 권한 선택 창(`Update Model Permissions`) 때문에 `exit 1`이 정상이다. 상태가 `idle`로 보여도 스크립트가 화면 문구로 감지해 멈춘다. 사용자가 직접 고른 뒤 다시 실행한다.
+
+```bash
+hc ls | jq -r --arg me "$HC_TERMINAL_ID" '.terminals[] | select(.parent==$me) | "\(.address) \(.name) \(.agent) \(.status // "-")"'   # macOS
+```
+```powershell
+hc ls --json | ConvertFrom-Json | ForEach-Object terminals | Where-Object parent -eq $env:HC_TERMINAL_ID   # Windows
+```
+
+## 3. 지시와 결과 확인
+
+1. **상태 확인:** `idle`/`done`이면 보낸다. `working`이면 끝나기를 기다린다. `blocked`·값 없음·`unknown`이면 신뢰·권한 창일 수 있으니 화면을 읽고 사용자에게 알린다. 목록에서 사라졌으면 기동 스크립트를 다시 실행한다.
+2. **작업 스크립트로 보낸다.** 스크립트가 머리줄(`[hc-task] id=… from=…`)과 필수 마무리를 붙이고, 원문을 `.hc/tasks/<작업ID>.md`에 보관한다. `브라우저: 필요`가 있으면 `.hc/docs/browser-qa.md` 필독 문구도 붙인다. 직접 `hc send`로 지시하지 않는다. 본문은 받는 쪽이 문서를 읽지 않아도 수행할 수 있게 쓴다:
+
+```text
+목표: <무엇을 할지. 여러 단계면 번호를 매겨 전부 적는다>
+담당 파일: <수정해도 되는 파일/디렉터리 — 이외는 건드리지 말 것>
+계약: <관련 API 계약·타입 파일 경로. 있을 때만>
+완료 조건: <검증 기준>
+브라우저: <브라우저 검증이 필요할 때만 "필요". 아래 대상 URL과 함께 쓴다>
+대상 URL: <허용 출처·경로 범위, 허용 리다이렉트 출처, 쓰기가 필요하면 테스트 계정·데이터와 허용 동작>
+이어받을 공간: <중단된 브라우저 QA를 재개할 때만. 공간 ID>
+```
+
+3. **반드시 `wait`로 확인한다.** 보고 메시지는 빠질 수 있으므로 완료는 보고 파일 `.hc/reports/<작업ID>.md`로 판단한다. 상대 화면의 마무리 말은 완료 보고가 아니다. 기다리는 동안 겹치지 않는 일을 해도 되며, 그러려면 Bash 백그라운드 실행으로 `wait`를 돌린다. 여러 작업은 ID마다 `wait`한다.
+
+| 종료 코드 | 뜻과 처리 |
+|---|---|
+| `send`/`nudge` 0 | 보냄. 상대가 `working`이 됐거나 차례가 넘어갔거나, `blocked` 등으로 상태가 바뀐 것을 확인했다(마지막 경우는 `wait`가 4로 알린다) |
+| `send`/`nudge` 5 | 미제출. Enter를 2번 더 눌러도 시작하지 않았다. `hc read <대상> --lines 40`으로 입력란을 본다 |
+| `wait` 0 | 보고 있음. 보고 파일과 실제 변경 파일을 확인한다 |
+| `wait` 2 | 보고 누락. `nudge`로 다시 보낸다(같은 ID, 최대 2번). 그래도 없으면 화면을 읽고 사용자에게 알린다 |
+| `wait` 3 | 시간 초과. 아직 작업 중이며 완료가 아니다. 다시 `wait` |
+| `wait` 4 | 점검 필요. 승인·신뢰 창이거나 종료됐다(보고 파일이 있어도 대상이 `blocked`면 4). 화면을 읽고 사용자에게 알린다 |
+| 1 | 사용법·조회 오류, 또는 화면에 권한·신뢰 창이 있어 보내지 않았다 |
+
+- 여러 단계 작업은 한 지시에 모든 단계를 적는다. 단계마다 판단이 필요하면 작업 ID를 나눠 보낸다.
+- 작업 ID는 다시 쓰지 않는다(스크립트가 거부한다). 예외는 `nudge`뿐이다.
+- 전달이 안 된 것 같으면 다시 보내기 전에 화면 기록(최근 100줄)을 먼저 읽는다. 대기가 timeout으로 끝난 것은 전달 실패의 증거가 아니다.
+- 잘못 보냈거나 멈춰야 하면 `hc interrupt <대상>`으로 멈추고 확인한 뒤 새 작업 ID로 다시 지시한다.
+
+### macOS (`.hc/task.sh`)
+
+```bash
+# <<'EOF'(따옴표)로 본문의 $·백틱 실행을 막는다.
+.hc/task.sh send <대상> <작업ID> <<'EOF'
+목표: ...
+담당 파일: ...
+완료 조건: ...
+EOF
+.hc/task.sh wait <작업ID> [초]
+.hc/task.sh nudge <작업ID>
+```
+
+### Windows (`.hc\task.ps1`, PowerShell)
+
+```powershell
+# 작은따옴표 here-string(@' '@)은 본문의 $를 해석하지 않는다.
+@'
+목표: ...
+담당 파일: ...
+완료 조건: ...
+'@ | Set-Content -Encoding UTF8 .hc\tasks\<작업ID>.body.txt
+powershell -NoProfile -ExecutionPolicy Bypass -File .hc\task.ps1 send <대상> <작업ID> .hc\tasks\<작업ID>.body.txt
+powershell -NoProfile -ExecutionPolicy Bypass -File .hc\task.ps1 wait <작업ID> [초]
+powershell -NoProfile -ExecutionPolicy Bypass -File .hc\task.ps1 nudge <작업ID>
+```
+
+- Claude Code의 셸이 Git Bash여도 위 `powershell ...` 명령을 그대로 쓴다. Git Bash의 `hc read`는 한글이 깨지므로 화면은 PowerShell로 읽는다.
+- Windows 스크립트는 `.hc\hc.ps1`(공용 함수)을 함께 읽는다. 직접 실행하지 않는다. `jq`는 필요 없다.
+
+## 4. `hc` 명령
+
+- 맨 `hc`는 터미널 선택 화면을 띄우므로 실행하지 않는다. 문법은 `hc --help`, `hc <명령> --help`. 파이프로 받을 때 `--json`을 붙이면 항상 JSON이다.
+
+| 동작 | 명령 |
+|---|---|
+| 상태 조회 | `hc get <대상>`의 `.status.state` (실제 작업 폴더는 `.foreground.cwd`. `hc ls`의 `cwd`는 처음 연 위치) |
+| 대기 | `hc wait <대상>` — timeout·다른 메시지 도착으로도 종료 코드 0이므로 결과의 `reason`과 상태를 다시 본다. `--children any`로 아무 하위나 |
+| 화면 읽기 | `hc read <대상> --lines 100 --json` (기본은 현재 화면만. 결과의 `complete`/`why`로 앞부분이 잘렸는지 본다) |
+| 키 입력 | `hc keys <대상> esc` (무해한 안내 창 넘기기에만) |
+| 파일 전달 | `hc put <대상> <파일>` |
+| 중단 | `hc interrupt <대상>` |
+| 서버 실행 | `hc run --bg --name <접두사>-dev --cwd <프로젝트 폴더> <명령>` → 로그 `hc read <이름>`, 종료 `hc kill <이름>`. 유지가 필요하면 `--outlive-parent`. 준비는 로그와 가능하면 health URL로 확인 |
+
+- `hc send --if idle`은 `done`이면 거부된다. `--force`로 입력하지 않는다. `hc send --wait`는 그 턴이 끝날 때까지 막히므로 짧은 작업에만 쓴다.
+- 보고는 `<hc from="tN ...">...</hc>` 메시지로 들어온다(herdr-core `notes` 설정이 켜져 있을 때). 꺼져 있으면 `.hc/reports/`와 `hc read`로 확인한다.
+
+## 5. 권한 설정
+
+### Codex
+
+- 기본은 샌드박스(`-s workspace-write -a never`, 네트워크 허용, `--no-daemon`). 샌드박스에서는 `.agents/`, `.codex/`, `.git/`이 읽기 전용이다.
+  - macOS: `~/.local/state/herdr-core` 쓰기 허용, `HC_TERMINAL_ID`/`HC_TERMINAL_SOCKET`을 `-c shell_environment_policy.set...`으로 주입한다.
+  - Windows: `HC_TERMINAL_SOCKET`이 파일 경로이면 그 폴더를 `--add-dir`로 쓰기 허용에 넣는다. 실제 Windows에서는 named pipe(`\\.\pipe\herdr-core-...`)여서 붙지 않았다. npm 설치 `codex.cmd`는 `up.ps1`이 실제 경로를 찾아 넘긴다. 샌드박스 안에서 `hc send`가 되는지는 아직 확인하지 못했고, 막혀도 보고 파일로 완료를 확인할 수 있다.
+- 우회 모드(`--dangerously-bypass-approvals-and-sandbox`)는 `.hc/local.env`에 `CODEX_MODE=bypass` 한 줄이 있을 때만 쓴다. 사용자 승인 뒤에만 만들고, 승인 기록은 `AGENTS.md` 5절에 적는다. `.hc/local.env`는 git에 올라가지 않으므로 복사한 프로젝트는 샌드박스로 시작한다.
+- 샌드박스 Codex가 첫 실행 권한 선택 창에서 Full Access로 바뀌면 사실상 우회 모드다. 그렇게 쓸 거면 처음부터 `CODEX_MODE=bypass`로 띄운다.
+- 우회 모드에서는 범위·승인 규칙이 도구로 강제되지 않으므로 Codex의 변경을 실제 파일로 확인한다.
+
+### Antigravity
+
+- 권한 우회 옵션 없이 띄우고, 기동 스크립트가 `agy --settings .hc/agy-settings.<mac|win>.json`으로 이 세션에만 허용 목록을 넘긴다. 목록을 바꾸면 agy를 다시 띄워야 적용된다.
+  - macOS: `command(hc send)`, `command(ego-browser)`, ego lite 앱 폴더 읽기
+  - Windows: `command(regex:hc send .*)`, `command(regex:node .*)`. PowerShell에서는 따옴표·한글이 섞인 명령이 접두사 규칙에 맞지 않아 정규식 형식을 쓴다.
+- 허용 항목은 명령 이름과 하위 명령까지만 좁혀진다(`command(node <경로>)`처럼 파일 경로로는 안 된다). 허용 규칙은 샌드박스 밖 재시도에도 적용된다.
+- 자동 모드에서는 목록 밖 명령도 agy 샌드박스와 자체 안전 판정을 거쳐 실행될 수 있으므로 허용 목록을 유일한 보호 장치로 보지 않는다.
+- 승인 창의 "always allow (Persist to settings.json)"은 전역 설정에 명령을 글자 그대로 저장한다. 고르지 않는다. 전역 설정(`~/.gemini/antigravity-cli/settings.json`)은 건드리지 않는다.

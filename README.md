@@ -21,7 +21,7 @@ pi: the user's personal agent (not part of development)
 | **Antigravity** | Screens, components, forms, state binding, API wiring, loading/error states, environment and build scripts | User flows verified in a real browser |
 | **pi** | Personal work | Excluded from the development split |
 
-The full rules (ownership boundaries, task/report format, safety) live in [`AGENTS.md`](AGENTS.md) (written in Korean).
+Shared rules (roles, ownership, reporting, safety) live in [`AGENTS.md`](AGENTS.md); Claude's dispatch procedure is in [`.hc/docs/lead.md`](.hc/docs/lead.md) and the browser QA rules in [`.hc/docs/browser-qa.md`](.hc/docs/browser-qa.md) (all in Korean).
 
 ## macOS vs Windows
 
@@ -40,8 +40,10 @@ Both use the same Herdr app and `hc` commands; the message format (`[hc-task]` /
 
 | File | Purpose |
 |---|---|
-| `AGENTS.md` | Shared rules for all three agents, with command appendices (A: `hc`, both OSes; B: Windows differences) and a per-project settings table |
-| `CLAUDE.md` | Claude Code notes; imports `@AGENTS.md` |
+| `AGENTS.md` | Short shared rules every agent reads each session (~75 lines): roles, ownership, reporting, safety, per-project settings |
+| `CLAUDE.md` | Claude Code notes; imports `@AGENTS.md` and `@.hc/docs/lead.md` |
+| `.hc/docs/lead.md` | Claude-only procedure: start-up, dispatch/wait/exit codes, `hc` commands, OS differences, Codex/agy permissions |
+| `.hc/docs/browser-qa.md` | Browser QA rules; the task scripts add a read-this-first line to tasks marked `브라우저: 필요` |
 | `.hc/up.sh` | macOS: start or check the Codex and Antigravity child terminals |
 | `.hc/up.ps1` | Windows: same job as `up.sh`, in PowerShell |
 | `.hc/hc.ps1` | Windows: shared helpers for `up.ps1` and `task.ps1` (not run directly) |
