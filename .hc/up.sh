@@ -81,7 +81,7 @@ pick_name() {
 }
 
 check_terminal() {
-  local target=$1 role=$2 reason=$3 data summary status cwd hint key expected dialog
+  local target=$1 role=$2 reason=$3 data summary status cwd hint key expected dialog perm screen
   data=$(hc get "$target") || { echo "경고: $target 조회 실패 ($reason)" >&2; return 1; }
   # agy는 foreground.name이 agy여도 status.app은 antigravity다.
   summary=$(jq -r '"state=\(.state // "-") cwd=\(.foreground.cwd // "-") agent=\(.status.app // .agent // .foreground.name // "-") status=\(.status.state // "-")"' <<<"$data") || return 1
@@ -113,6 +113,21 @@ check_terminal() {
         return 1
       fi
     done
+    # 샌드박스 모드인데 첫 실행 권한 창 등에서 Full Access가 골라지면 인자(-s workspace-write)와 달리 제한 없이 돈다.
+    # 화면 기록에서 Codex 이벤트 줄(• Permission selection requested: <값>)의 마지막 값이 정확히 Full Access이면 멈춘다.
+    # 읽지 못하면 확인할 수 없으므로 멈춘다. 기록이 --lines 범위 밖으로 밀려나면 찾지 못한다(lead.md 5절).
+    # bypass 모드는 원래 제한이 없으므로 검사하지 않는다.
+    if [ "$CODEX_MODE" = sandbox ]; then
+      if ! screen=$(hc read "$target" --lines 3000 2>/dev/null); then
+        echo "경고: $target 화면 기록을 읽지 못해 Full Access 여부를 확인할 수 없습니다 ($reason). hc read $target 으로 확인하세요." >&2
+        return 1
+      fi
+      perm=$(printf '%s\n' "$screen" | sed -n -E 's/^[[:space:]]*•[[:space:]]+Permission selection requested: (.*[^[:space:]])[[:space:]]*$/\1/p' | tail -1)
+      if [ "$perm" = "Full Access" ]; then
+        echo "경고: $target 은(는) Full Access로 바뀌어 있습니다 ($reason). 샌드박스 인자와 달리 제한 없이 실행됩니다. 작업이 없으면 hc kill $target 후 다시 실행하고, 권한 창에서는 Full Access를 고르지 마세요." >&2
+        return 1
+      fi
+    fi
   fi
   case "$status" in
     idle|done)

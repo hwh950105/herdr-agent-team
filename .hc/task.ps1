@@ -90,6 +90,43 @@ function Invoke-Node([string[]]$NArgs) {
 }
 function Test-Report([string]$Rp) { (Test-Path -LiteralPath $Rp) -and (Get-Item -LiteralPath $Rp).Length -gt 0 }
 
+# agy 작업이면 agy 로그에서 그 작업 구간의 명령 실행·승인 창·샌드박스 밖 실행 횟수를 세어 보여 준다(종료 코드와 무관). task.sh와 같은 규칙.
+# Auto 모드는 샌드박스 밖 실행을 사람이 아니라 검토 에이전트가 승인할 수 있어서, 보고만으로는 우회 여부를 알 수 없다.
+# 샌드박스 밖 실행 = 명령 판정 수 - 샌드박스 실행 수 - 사람 승인 창 수 (로그 기반 추정, agy 1.5.14 기준).
+# 구간: 이 작업의 [hc-task] 머리줄(nudge 포함)이 들어온 입력부터, 다른 [hc-task] 머리줄 입력 전까지.
+function Show-AgyLogSummary([string]$Id, [string]$Target) {
+  try {
+    $D = Get-Terminal $Target
+    if ($null -eq $D -or "$(Get-Field $D 'status.app')" -ne 'antigravity') { return }
+    $Dir = if ($env:AGY_LOG_DIR) { $env:AGY_LOG_DIR } else { Join-Path $env:USERPROFILE '.gemini\antigravity-cli\log' }
+    if (-not (Test-Path -LiteralPath $Dir -PathType Container)) { return }
+    $Key = "[hc-task] id=$Id from="
+    $Log = $null
+    foreach ($F in @(Get-ChildItem -LiteralPath $Dir -Filter 'cli-*.log' | Where-Object { -not $_.PSIsContainer } | Sort-Object LastWriteTime -Descending)) {
+      if (Select-String -LiteralPath $F.FullName -SimpleMatch -Pattern $Key -Quiet) { $Log = $F; break }
+    }
+    if ($null -eq $Log) { Write-Output "agy 로그: $Id 기록을 찾지 못했습니다 ($Dir)"; return }
+    $Inside = $false; $Cmd = 0; $Sb = 0; $Ask = 0
+    # agy가 쓰는 중인 로그도 읽도록 쓰기 공유를 허용해 연다.
+    $Fs = New-Object IO.FileStream($Log.FullName, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+    $Rd = New-Object IO.StreamReader($Fs, [Text.Encoding]::UTF8)
+    try {
+      while ($null -ne ($L = $Rd.ReadLine())) {
+        if ($L.Contains('HandleUserInput') -and $L.Contains('[hc-task] id=')) { $Inside = $L.Contains($Key) }
+        if (-not $Inside) { continue }
+        if ($L.Contains('Monitor agy_tool_safety FINISHED') -and $L -notmatch 'reason="(allowed_tool|unsupported_tool)') { $Cmd++ }
+        if ($L.Contains('escapable binaries=')) { $Sb++ }
+        if ($L.Contains('Surfacing tool confirmation')) { $Ask++ }
+      }
+    } finally { $Rd.Dispose() }
+    $Out = [Math]::Max(0, $Cmd - $Sb - $Ask)
+    Write-Output "agy 로그(추정): 명령 ${Cmd}회, 샌드박스 안 ${Sb}회, 사람 승인 창 ${Ask}회, 샌드박스 밖 실행 ${Out}회 — $($Log.FullName)"
+    if ($Out -gt 0) { Write-Output '  ↳ 샌드박스 밖 실행은 Auto 검토 에이전트가 승인한 것일 수 있습니다. 필요하면 로그의 BypassSandbox 줄을 확인하세요.' }
+  } catch {
+    Write-Output "agy 로그 요약 실패: $($_.Exception.Message)"
+  }
+}
+
 $Cmd = if ($A -and $A.Count -ge 1) { $A[0] } else { '' }
 switch ($Cmd) {
   'send' {
@@ -155,7 +192,7 @@ switch ($Cmd) {
       $S = "$(Get-Field $D 'status.state')"; if (-not $S) { $S = '-' }
       $Cur = Get-Field $D 'turn'; $Cur = if ($null -eq $Cur) { 0 } else { [int]$Cur }
       # blocked 검사를 차례 종료 판정보다 먼저 한다. 승인 창에서 멈춘 것을 '보고 누락'으로 오판하지 않게.
-      if ($S -notin 'working', 'idle', 'done') { Write-Output "점검 필요: $T 상태=$S (승인·신뢰 창일 수 있음). hc read $T --lines 60 으로 보고 사용자에게 알리세요"; exit 4 }
+      if ($S -notin 'working', 'idle', 'done') { Write-Output "점검 필요: $T 상태=$S (승인·신뢰 창일 수 있음). hc read $T --lines 60 으로 보고 사용자에게 알리세요"; Show-AgyLogSummary $Id $T; exit 4 }
       if ($S -ne 'working' -and $Cur -gt $Turn) { break }
       $Left = [int][Math]::Floor(($Deadline - (Get-Date)).TotalSeconds)
       if ($Left -le 0) { Write-Output "시간 초과: $T 아직 끝나지 않았습니다(완료 아님). 다시 task.ps1 wait $Id"; exit 3 }
@@ -165,6 +202,7 @@ switch ($Cmd) {
     if (Test-Report $Rp) {
       Write-Output "보고 있음: $(Get-Content -LiteralPath $Rp -TotalCount 1 -Encoding UTF8)"
       Write-Output "파일: $Rp"
+      Show-AgyLogSummary $Id $T
       # P8: 보고 파일을 쓴 뒤 보고 명령 승인 창 등에서 멈춘 경우를 구분한다.
       $S = Get-State $T
       if ($S -notin 'idle', 'done') {
@@ -176,6 +214,7 @@ switch ($Cmd) {
     Write-Output "보고 누락: $T 의 차례가 끝났지만 $Rp 가 없습니다. 화면 마지막 부분:"
     $R = Invoke-Hc @('read', $T, '--lines', '40')
     @($R.Text -split "`n" | Where-Object { $_.Trim() } | Select-Object -Last 15) | ForEach-Object { Write-Output $_ }
+    Show-AgyLogSummary $Id $T
     Write-Output "→ 화면에 결과만 남기고 멈춘 것입니다. task.ps1 nudge $Id 로 이어서 끝내고 보고하라고 보내세요."
     exit 2
   }

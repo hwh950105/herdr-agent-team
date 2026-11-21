@@ -129,6 +129,38 @@ cmd_send() {
   echo "보냄: $t id=$id (turn=$turn). 기다리기: .hc/task.sh wait $id"
 }
 
+# agy 작업이면 agy 로그에서 그 작업 구간의 명령 실행·승인 창·샌드박스 밖 실행 횟수를 세어 보여 준다(종료 코드와 무관).
+# Auto 모드는 샌드박스 밖 실행을 사람이 아니라 검토 에이전트가 승인할 수 있어서, 보고만으로는 우회 여부를 알 수 없다.
+# 샌드박스 밖 실행 = 명령 판정 수 - 샌드박스 실행 수 - 사람 승인 창 수 (로그 기반 추정, agy 1.5.14 기준).
+agy_log_summary() { # 작업ID 대상
+  # 구간: 이 작업의 [hc-task] 머리줄(nudge 포함)이 들어온 입력부터, 다른 [hc-task] 머리줄 입력 전까지.
+  # 머리줄이 아닌 입력(예: 사람이 직접 친 말)은 같은 작업의 이어짐으로 보고 구간을 닫지 않는다.
+  local id=$1 t=$2 app dir log f key
+  app=$(hc get "$t" 2>/dev/null | jq -r '.status.app // empty' 2>/dev/null) || return 0
+  [ "$app" = antigravity ] || return 0
+  dir=${AGY_LOG_DIR:-$HOME/.gemini/antigravity-cli/log}
+  [ -d "$dir" ] || return 0
+  key="[hc-task] id=$id from="
+  log=
+  for f in "$dir"/cli-*.log; do   # 경로에 공백이 있어도 파일 단위로 다룬다
+    [ -f "$f" ] || continue
+    grep -q -F "$key" "$f" 2>/dev/null || continue
+    if [ -z "$log" ] || [ "$f" -nt "$log" ]; then log=$f; fi
+  done
+  if [ -z "$log" ]; then echo "agy 로그: $id 기록을 찾지 못했습니다 ($dir)"; return 0; fi
+  awk -v key="$key" -v lf="$log" '
+    /HandleUserInput/ && index($0, "[hc-task] id=") > 0 { inside = (index($0, key) > 0) }
+    !inside { next }
+    /Monitor agy_tool_safety FINISHED/ && !/reason="(allowed_tool|unsupported_tool)/ { cmd++ }
+    /escapable binaries=/ { sb++ }
+    /Surfacing tool confirmation/ { ask++ }
+    END {
+      out = cmd - sb - ask; if (out < 0) out = 0
+      printf "agy 로그(추정): 명령 %d회, 샌드박스 안 %d회, 사람 승인 창 %d회, 샌드박스 밖 실행 %d회 — %s\n", cmd, sb, ask, out, lf
+      if (out > 0) print "  ↳ 샌드박스 밖 실행은 Auto 검토 에이전트가 승인한 것일 수 있습니다. 필요하면 로그의 BypassSandbox 줄을 확인하세요."
+    }' "$log" || true
+}
+
 cmd_wait() {
   [ $# -ge 1 ] && [ $# -le 2 ] || die "사용법: task.sh wait <작업ID> [초]"
   local id=$1 limit=${2:-1800} f t turn deadline data s cur r
@@ -150,7 +182,7 @@ cmd_wait() {
     # blocked 검사를 차례 종료 판정보다 먼저 한다. 승인 창에서 멈춘 것을 '보고 누락'으로 오판하지 않게.
     case "$s" in
       working|idle|done) ;;
-      *) echo "점검 필요: $t 상태=$s (승인·신뢰 창일 수 있음). hc read $t --lines 60 으로 보고 사용자에게 알리세요"; exit 4 ;;
+      *) echo "점검 필요: $t 상태=$s (승인·신뢰 창일 수 있음). hc read $t --lines 60 으로 보고 사용자에게 알리세요"; agy_log_summary "$id" "$t"; exit 4 ;;
     esac
     if [ "$s" != working ] && [ "$cur" -gt "$turn" ]; then break; fi
     r=$((deadline-SECONDS))
@@ -164,6 +196,7 @@ cmd_wait() {
   if [ -s "$REPORTS/$id.md" ]; then
     echo "보고 있음: $(head -1 "$REPORTS/$id.md")"
     echo "파일: $REPORTS/$id.md"
+    agy_log_summary "$id" "$t"
     # 보고 파일을 쓴 뒤 보고 명령 승인 창 등에서 멈춘 경우를 구분한다.
     s=$(state_of "$t" 2>/dev/null || echo gone)
     case "$s" in
@@ -173,6 +206,7 @@ cmd_wait() {
   fi
   echo "보고 누락: $t 의 차례가 끝났지만 $REPORTS/$id.md 가 없습니다. 화면 마지막 부분:"
   hc read "$t" --lines 40 2>/dev/null | grep -v '^[[:space:]]*$' | tail -15 || true
+  agy_log_summary "$id" "$t"
   echo "→ 화면에 결과만 남기고 멈춘 것입니다. .hc/task.sh nudge $id 로 이어서 끝내고 보고하라고 보내세요."
   exit 2
 }

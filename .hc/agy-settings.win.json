@@ -2,6 +2,19 @@
   "permissions": {
     "allow": [
       "command(regex:hc send .*)"
+    ],
+    "ask": [
+      "command(rm)",
+      "command(git push)",
+      "command(git reset)",
+      "command(git clean)",
+      "command(npm publish)",
+      "command(sudo)",
+      "command(hc kill)",
+      "command(hc server)",
+      "command(Remove-Item)",
+      "command(del)",
+      "command(rmdir)"
     ]
   }
 }

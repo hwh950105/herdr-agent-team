@@ -94,6 +94,24 @@ function Test-Terminal([string]$Target, [string]$Role, [string]$Reason) {
     [Console]::Error.WriteLine("경고: $Target 재사용·준비 조건 불일치 ($Reason; $Summary).$Hint hc read $Target --lines 60 으로 확인하세요.")
     return $false
   }
+  # 샌드박스 모드인데 첫 실행 권한 창 등에서 Full Access가 골라지면 인자(-s workspace-write)와 달리 제한 없이 돈다.
+  # 화면 기록에서 Codex 이벤트 줄(• Permission selection requested: <값>)의 마지막 값이 정확히 Full Access이면 멈춘다.
+  # 읽지 못하면 확인할 수 없으므로 멈춘다. 기록이 --lines 범위 밖으로 밀려나면 찾지 못한다(lead.md 5절). up.sh와 같은 규칙.
+  if ($Role -eq 'codex' -and $CodexMode -eq 'sandbox') {
+    $Scr = Invoke-Hc @('read', $Target, '--lines', '3000')
+    if ($Scr.Code -ne 0) {
+      [Console]::Error.WriteLine("경고: $Target 화면 기록을 읽지 못해 Full Access 여부를 확인할 수 없습니다 ($Reason). hc read $Target --lines 60 으로 확인하세요.")
+      return $false
+    }
+    $Perm = $null
+    foreach ($L in ($Scr.Text -split "`r?`n")) {
+      if ($L -match '^\s*•\s+Permission selection requested: (.*\S)\s*$') { $Perm = $Matches[1] }
+    }
+    if ($Perm -ceq 'Full Access') {
+      [Console]::Error.WriteLine("경고: $Target 은(는) Full Access로 바뀌어 있습니다 ($Reason). 샌드박스 인자와 달리 제한 없이 실행됩니다. 작업이 없으면 hc kill $Target 후 다시 실행하고, 권한 창에서는 Full Access를 고르지 마세요. 전역 %USERPROFILE%\.codex\config.toml 의 sandbox_mode 도 확인하세요.")
+      return $false
+    }
+  }
   switch ($Status) {
     { $_ -in 'idle', 'done' } {
       $Dlg = Find-Dialog $Target

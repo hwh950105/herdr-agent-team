@@ -2,6 +2,16 @@
   "permissions": {
     "allow": [
       "command(hc send)"
+    ],
+    "ask": [
+      "command(rm)",
+      "command(git push)",
+      "command(git reset)",
+      "command(git clean)",
+      "command(npm publish)",
+      "command(sudo)",
+      "command(hc kill)",
+      "command(hc server)"
     ]
   }
 }
