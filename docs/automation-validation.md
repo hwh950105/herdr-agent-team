@@ -1,6 +1,6 @@
 # 자동화 개선 검증 기록
 
-2026-11-21, Windows 11·PowerShell 5.1·Node 26·Herdr `hc 0.1.21`에서 확인했다. Claude가 사용량 한도로 중단한 `automation-improvements` 브랜치를 사용자 지시로 Codex `t4`가 이어받았다. 기존 Todo 프로젝트 `C:\Users\hwh\herdr-todo-test`와 기존 에이전트 `t7`(Codex), `t8`(Antigravity), 서버 `t10`을 재사용했다. Claude의 응답이나 새 기동에 의존하지 않았다.
+2026-11-21, Windows 11·PowerShell 5.1·Node 26·Herdr `hc 0.1.21`에서 확인했다. Claude가 사용량 한도로 중단한 `automation-improvements` 브랜치를 사용자 지시로 Codex `t4`가 이어받았다. 별도 Todo 테스트 폴더(예: `C:\Users\<사용자>\herdr-todo-test`)와 기존 에이전트 `t7`(Codex), `t8`(Antigravity), 서버 `t10`을 재사용했다. Claude의 응답이나 새 기동에 의존하지 않았다. 사용자별 절대 경로는 공개 문서에서 일반화했다.
 
 기준 구현은 `f5c9f34`이며, 이번에는 문서와 핵심 방어 로직을 보완했다. 배포·push·전역 권한 변경·기존 터미널 종료는 하지 않았다. 원래 프로젝트의 미추적 `package.json`, `package-lock.json`도 수정하지 않았다.
 
@@ -73,4 +73,5 @@ QA 재현 파일들은 이번 작업의 로컬 증거다. 위 경로의 이전 �
 - 실행 중 SQLite 서버의 정상 GET도 `data/e2e.db-shm`을 바꿀 수 있었다. 최초 check가 7로 중단한 뒤 서버 부산물임을 확인하고 `automation-runtime`으로 `data/`를 명시적으로 예약·인수했다. 검사에서 이 경로를 몰래 제외하지 않았다. 기존 서버는 계속 실행 중이며 종료하지 않았다.
 - 이번 브라우저 검증에서 실제 서버에는 GET만 전송했다. POST는 UI 반응 확인용 모의 응답이다. 실제 CRUD·영속성은 기존 41개 API 테스트의 메모리/임시 SQLite 및 이전 Todo E2E 기록과 구분한다.
 - Antigravity의 Windows 샌드박스에서는 QA 쓰기/localhost 접근이 실패했고 기존 허용 규칙으로 샌드박스 밖 재시도 후 통과했다. 전역 설정이나 허용 목록을 넓히지 않았다.
+- 위 브라우저 실행은 당시 `node` 자동 실행을 허용한 설정에서 확인한 기록이다. 이후 공개 템플릿 기본값은 보고용 `hc send`만 허용하도록 축소했다. 축소한 기본값으로 브라우저 무인 실행을 검증한 것은 아니며, 실행 승인이 필요할 수 있다.
 - 새 task.sh의 **macOS 실제 실행은 미실행**이다. 현재 Windows Git Bash에서 문법만 검사했고 jq도 없어 전송/대기 런타임을 macOS 검증으로 표시하지 않았다. 이미지 시나리오 역시 미실행이다.

@@ -2,6 +2,10 @@
 
 [English](README.md) | **한국어**
 
+> **Work in Progress · 개발 진행 중**
+>
+> 현재 활발하게 개발·개선 중인 공개 프로젝트이며 안정화 릴리스가 아닙니다. 일부 흐름은 실제 Windows·macOS에서 검증했지만, 일부 자동화는 구현 또는 검증을 진행 중입니다. 환경과 도구 버전에 따라 문제가 발생할 수 있습니다. 실사용 전에 권한 설정과 기동·작업 스크립트를 확인하세요. 검증·미검증 항목은 아래 [검증 범위](#검증-범위)에서 구분합니다.
+
 [Herdr](https://herdr.dev) 안에서 **Claude Code가 지휘관 겸 핵심 코드 담당**이 되어 **Codex**(백엔드 구현)와 **Antigravity**(`agy`, UI 구현·브라우저 검증)를 옆 터미널로 띄우고, 정해진 형식의 메시지로 작업을 주고받는 공동 작업 폴더 템플릿입니다. 프로젝트 이름에 의존하지 않으므로 새 프로젝트에 파일을 그대로 복사해 씁니다. **macOS와 Windows**를 모두 지원합니다.
 
 ```
@@ -41,14 +45,14 @@ pi: 사용자 개인용 (개발 분담 제외)
 
 | 파일 | 내용 |
 |---|---|
-| `AGENTS.md` | 세 에이전트가 매 세션 읽는 공통 규칙(약 75줄). 역할·소유 경계, 보고 원칙, 안전 규칙, 프로젝트별 설정 칸 |
+| `AGENTS.md` | 세 에이전트가 매 세션 읽는 공통 규칙. 역할·소유 경계, 보고 원칙, 안전 규칙, 프로젝트별 설정 칸 |
 | `CLAUDE.md` | Claude Code 전용 메모. `@AGENTS.md`와 `@.hc/docs/lead.md`를 불러온다 |
 | `.hc/docs/lead.md` | Claude 전용 지휘 절차: 기동, 지시·대기·종료 코드, `hc` 명령, OS별 명령, Codex·agy 권한 설정 |
 | `.hc/docs/browser-qa.md` | 브라우저 검증 규칙. `브라우저: 필요` 지시에는 작업 스크립트가 필독 문구를 자동으로 붙인다 |
 | `.hc/up.sh` | macOS: Codex·Antigravity 하위 터미널을 띄우거나 검사 |
 | `.hc/up.ps1` | Windows: `up.sh`와 같은 일을 PowerShell로 한다 |
 | `.hc/hc.ps1` | Windows: `up.ps1`·`task.ps1`이 함께 쓰는 공용 함수(직접 실행하지 않음) |
-| `.hc/agy-settings.mac.json`, `.hc/agy-settings.win.json` | Antigravity 세션 전용 허용 목록. 보고·브라우저 명령의 승인 창을 없앤다 |
+| `.hc/agy-settings.mac.json`, `.hc/agy-settings.win.json` | Antigravity 세션 전용 허용 목록. 기본은 보고용 통신만 허용하며 브라우저·Node 실행은 승인이 필요할 수 있다 |
 | `.hc/task.sh`, `.hc/task.ps1` | 작업 지시 보내기·기다리기·보고 확인. 보고 메시지가 빠져도 보고 파일로 완료를 판단하고, 누락이면 이어서 하라고 다시 보낸다 |
 | `.hc/tasks/` | 보낸 지시 원문과 대기 기록(git 제외) |
 | `.hc/scope.mjs`, `.hc/scope.test.mjs` | Node 18+ 공통 소유 범위 예약·변경 검사·수정 지시 한도·verified 기록과 모의 테스트(외부 패키지 없음) |
@@ -57,6 +61,9 @@ pi: 사용자 개인용 (개발 분담 제외)
 | `.hc/art/` | art가 만든 이미지의 기본 저장 위치(git 제외) |
 | `.hc/qa/` | 브라우저 검증 스크린샷·증거(git 제외) |
 | `docs/windows-setup-issues.md` | Windows 실환경 셋팅 기록과 문제점·해결 |
+| `docs/automation-validation.md` | 자동화의 실제·모의·미실행 검증 기록 |
+| `docs/public-readiness.md` | 공개 파일·이력 점검, 권한 기본값 변경, 남은 한계 |
+| `LICENSE` | 이 저장소 코드·문서에 적용되는 MIT 라이선스 |
 
 ## 빠른 시작: 에이전트에게 셋팅 맡기기
 
@@ -67,6 +74,21 @@ README.ko.md의 "에이전트용 셋팅 절차"에서 지금 OS에 맞는 표를
 각 단계는 확인 명령부터 돌리고, 이미 되어 있으면 건너뛰어. "사용자 확인" 표시가 있는 단계는 실행 전에 나에게 물어봐.
 끝나면 단계별 결과(완료/건너뜀/사용자 조치 필요)를 표로 정리해 줘.
 ```
+
+### 처음 사용하는 개발자의 순서
+
+| 단계 | 할 일 |
+|---|---|
+| 1. 프로그램 확인 | Git, Node(`node --version`), 셸과 각 CLI 버전을 확인한다. 범위 검사는 Node 18+가 필요하며 지원 중인 LTS와 각 도구의 요구사항을 확인한다. macOS는 Bash·jq, Windows 스크립트는 PowerShell을 사용한다 |
+| 2. Herdr 설치 | [Herdr 공식 안내](https://herdr.dev/)로 앱을 설치하고 앱 안 터미널에서 `hc --version`을 확인한다 |
+| 3. 에이전트 설치·로그인 | [Claude Code](https://code.claude.com/docs/en/setup), [Codex CLI](https://developers.openai.com/codex/cli/), [Antigravity](https://antigravity.google/download) 공식 안내를 따른다. `claude --version`, `codex --version`, `agy --version`을 확인하고 로그인은 직접 한다. PowerShell이 npm/Codex 스크립트를 막으면 `npm.cmd`/`codex.cmd`를 쓴다 |
+| 4. 프로젝트 설정 | 깨끗한 checkout의 추적 파일과 추적된 `.hc/` 파일만 복사한다. 기존 작업 폴더의 `.git`, 로컬 설정, 에이전트 인증정보·보고·브라우저 세션은 복사하지 않는다. 프로젝트의 기존 manifest는 유지하고 `AGENTS.md` 5절에 스택·담당 범위·계약·테스트 명령을 채운다 |
+| 5. 에이전트 실행 | 프로젝트 폴더의 Herdr 터미널에서 Claude를 실행한다. 위임이 필요할 때 Claude가 OS에 맞는 기동 스크립트를 실행하며, 작은 작업은 단독 처리할 수 있다 |
+| 6. 통신·권한 확인 | [지휘 절차](.hc/docs/lead.md)에 따라 `담당 파일: 없음`인 읽기 전용 작업부터 보내고 보고·터미널 상태를 확인한다. 신뢰·로그인·권한 창은 사용자가 직접 처리하고 기본 샌드박스를 유지한다 |
+| 7. 작은 테스트 | `node --test .hc/scope.test.mjs`로 통과·실패·건너뜀을 기록한다. 이어서 담당 경로와 검사 명령이 명확한 작은 작업을 시도한다. 브라우저 검증은 OS별 도구와 실행 승인이 필요할 수 있다 |
+| 8. 실제 개발 | 공유 계약을 먼저 정하고 독립 범위를 위임한다. 실제 변경과 테스트 결과를 확인한 뒤 검증을 기록한다. `wait` 성공만으로 기능 완료를 판단하지 않는다 |
+
+OS별 확인·조치는 아래 기존 표를 사용합니다. 설치 명령은 예시이므로 내려받을 스크립트를 확인하고 최신 공식 안내를 따르세요. 한 PC의 성공을 모든 환경·버전의 호환성으로 보장하지 않습니다.
 
 ### 에이전트용 셋팅 절차
 
@@ -82,13 +104,14 @@ README.ko.md의 "에이전트용 셋팅 절차"에서 지금 OS에 맞는 표를
 | 2 | herdr-core(`hc`) | `hc --version` | **사용자 확인** 후 `curl -fsSL https://releases.herdr.dev/core/install.sh \| sh`. 맨 `hc`는 실행하지 않는다 |
 | 3 | 옛 `herdr` CLI가 없는지 | `command -v herdr` (출력 없음이 정상) | **사용자 확인.** 옛 CLI는 앱과 다른 서버를 쓰므로 macOS에서는 지우는 것을 권한다 |
 | 4 | jq | `command -v jq` | `brew install jq` |
+| 4a | Node.js·Claude Code | `node --version`, `claude --version` | 위 공식 설치 안내를 따른다. Node 지원 중인 LTS를 권장하며 로그인은 사용자 조치 |
 | 5 | Codex CLI | `command -v codex` | `npm i -g @openai/codex@latest` (`EACCES`면 사용자가 `sudo chown -R "$(id -u):$(id -g)" ~/.npm` 실행 후 재시도) |
 | 6 | Antigravity CLI | `agy --version` | **사용자 조치.** Antigravity 앱을 설치하고 앱 안내에 따라 `agy`를 PATH에 등록. 없으면 `export PATH="$HOME/.local/bin:$PATH"` 후 재확인 |
 | 7 | ego lite | `ego-browser --version` | **사용자 조치.** ego lite 앱을 설치하고 첫 실행 안내를 마친다 |
 | 8 | 로그인 | `agy models` (모델 목록). Codex는 사용자에게 묻는다 | **사용자 조치.** 별도 터미널에서 `codex`, `agy`를 한 번씩 실행해 로그인 |
 | 9 | Codex 권한 모드 | `cat .hc/local.env 2>/dev/null` | 기본은 샌드박스라 조치 없음. **사용자가 원할 때만** 승인 후 `CODEX_MODE=bypass`를 적고 `AGENTS.md` 5절에 승인 기록을 남긴다 |
 | 10 | 하위 터미널 기동 | `.hc/up.sh; echo "exit=$?"` (`exit=0`, 둘 다 `idle`) | 아래 "문제 해결". **첫 실행은** Codex·agy가 폴더 신뢰 창을 띄워 `exit=1`로 끝나는 것이 정상이다. 사용자가 두 터미널에서 직접 고른 뒤 다시 실행한다 |
-| 11 | 통신 확인 | Antigravity에게 `[hc-task]`로 `echo "$HC_TERMINAL_ID"` 같은 짧은 작업을 보내고 `[hc-report]`가 오는지 본다 | `up.sh`가 `.hc/agy-settings.mac.json` 허용 목록을 넘기므로 승인 창이 뜨지 않아야 한다. 뜨면 화면을 사용자에게 보고하고, 필요한 명령을 허용 목록에 추가할지 묻는다 |
+| 11 | 통신 확인 | Antigravity에게 `담당 파일: 없음`인 짧은 읽기 작업을 보내고 보고 파일·상태를 `wait`로 확인한다 | 기본 허용 목록은 `hc send`뿐이다. 승인 창이 뜨면 사용자에게 알리고 직접 선택하게 한다 |
 | 12 | 브라우저 확인 | Antigravity에게 `브라우저: 필요`, `대상 URL: https://example.com`(읽기 전용)으로 페이지 제목(`page.title()`이 `Example Domain`)을 확인하고 스크린샷을 `.hc/qa/<작업ID>/`에 저장하게 한다 | 실패하면 화면을 사용자에게 보고 |
 | 13 | (선택) bercail 테마 | `test -f ~/.config/herdr-app/layouts/bercail.json` | **사용자 확인.** 원하면 [레이아웃 절](#레이아웃-macos-bercail-windows-기본) 안내 |
 
@@ -102,9 +125,10 @@ PowerShell 기준입니다. Claude Code는 **Herdr 앱 안의 터미널**에서 
 | 2 | herdr-core(`hc`) | `hc --version` | **사용자 확인** 후 Herdr 앱 설치(`powershell -c "irm https://releases.herdr.dev/app/install.ps1 \| iex"`, herdr-core 포함). `hc`만 없으면 `powershell -c "irm https://releases.herdr.dev/core/install.ps1 \| iex"`. 맨 `hc`는 실행하지 않는다 |
 | 3 | 옛 `herdr` TUI가 없는지 | `Get-Command herdr -ErrorAction SilentlyContinue` (출력 없음이 정상) | **사용자 확인.** 앱과 다른 서버를 쓰므로 쓰지 않는다. 지울지는 사용자가 정한다 |
 | 4 | Node.js | `node --version` | **사용자 조치.** `winget install OpenJS.NodeJS.LTS` |
-| 5 | Codex CLI | `Get-Command codex` | `npm i -g @openai/codex@latest` |
+| 4a | Claude Code | `claude --version` | 위 공식 설치 안내를 따른다. 로그인은 사용자 조치 |
+| 5 | Codex CLI | `Get-Command codex` | `npm.cmd i -g @openai/codex@latest` |
 | 6 | Antigravity CLI | `agy --version` | **사용자 조치.** Antigravity 앱을 설치하고 앱 안내에 따라 `agy`를 PATH에 등록 |
-| 7 | Playwright | `npx --no-install playwright --version` (없으면 설치를 묻지 않고 실패한다) | 프로젝트 폴더에서 `npm i -D playwright` 후 `npx playwright install chromium` |
+| 7 | Playwright | `npx.cmd --no-install playwright --version` (없으면 설치를 묻지 않고 실패한다) | 브라우저 검증이 필요할 때 프로젝트 폴더에서 `npm.cmd i -D playwright` 후 `npx.cmd playwright install chromium` |
 | 8 | 로그인 | `agy models` (모델 목록). Codex는 사용자에게 묻는다 | **사용자 조치.** 별도 터미널에서 `codex`, `agy`를 한 번씩 실행해 로그인 |
 | 9 | Codex 권한 모드 | `Get-Content .hc\local.env -ErrorAction SilentlyContinue` | macOS 9단계와 같다. 사용자가 승인했으면 `Set-Content -Encoding ASCII .hc\local.env 'CODEX_MODE=bypass'` |
 | 10 | 하위 터미널 기동 | `powershell -NoProfile -ExecutionPolicy Bypass -File .hc\up.ps1; "exit=$LASTEXITCODE"` (`exit=0`, 둘 다 `idle`) | 아래 "문제 해결". **첫 실행은** 폴더 신뢰 창 때문에 `exit=1`이 정상이다. 샌드박스 모드의 Codex는 이어서 권한 선택 창(`Update Model Permissions`)을 띄우는데, 상태가 `idle`로 보여도 스크립트가 화면 문구로 감지해 멈춘다. 사용자가 직접 고른다. Full Access를 고를 거라면 처음부터 9단계의 `CODEX_MODE=bypass`로 띄운다 |
@@ -161,8 +185,30 @@ macOS의 Herdr.app에서는 커뮤니티 레이아웃 **bercail**(작성자 simo
 
 권한 우회 모드(`--dangerously-bypass-approvals-and-sandbox`)는 git에 올리지 않는 `.hc/local.env`에 `CODEX_MODE=bypass` 한 줄이 있을 때만 씁니다. 이 모드에서는 `AGENTS.md`의 담당 파일·삭제 금지 규칙이 **에이전트의 약속일 뿐 도구로 막히지 않습니다.** 프로젝트마다 따로 판단해서 켭니다.
 
+우회 모드는 사용자 명시적 승인과 `AGENTS.md` 5절 기록이 필요합니다. `.hc/local.env`를 커밋하거나 전역 권한을 넓히지 않습니다. Antigravity 기본 허용 목록은 `hc send`뿐이며, 폭넓은 Node·브라우저 실행은 스크립트와 브라우저 접근 범위를 확인한 뒤 사용자가 선택할 때만 추가합니다([권한 설정](.hc/docs/lead.md#5-권한-설정)). 승인 창이 생길 수 있으며 허용 목록 자체가 완전한 보안 경계는 아닙니다.
+
+API 키·인증 파일·`.env`·브라우저 프로필·민감 로그는 Git에 넣지 않습니다. `.gitignore`가 허용하는 `.env.example`·`.env.sample`·`.env.template`에는 예시 값만 쓰세요. ignore는 이미 추적된 파일이나 과거 이력을 지우지 않으므로 공개 전에 `git status`와 staged diff를 확인합니다. 이번 점검 범위와 한계는 [공개 준비 점검](docs/public-readiness.md)에 기록합니다.
+
 ## 검증 범위
 
 - `.hc/up.sh`(macOS)는 가짜 `hc`로 재사용·불일치·중복·주입값·대기 시간 초과 등을 모의 검사했고, 실제 Herdr.app에서 Codex·Antigravity 기동, `hc` 보고, ego lite 브라우저 검증을 확인했습니다.
 - `.hc/up.ps1`·`.hc/task.ps1`(Windows)은 Windows 11 + PowerShell 5.1 + Herdr 앱에서 기동, Codex 백엔드 작업, Antigravity 화면 구현과 Playwright 검증, 보고 파일과 `hc send` 보고를 확인했습니다. 진행 기록과 문제점·해결은 [`docs/windows-setup-issues.md`](docs/windows-setup-issues.md)에 있습니다. Windows의 `HC_TERMINAL_SOCKET`은 named pipe입니다.
 - 샌드박스 Codex의 named pipe 보고와 blocked 대기 구분은 Todo 테스트 프로젝트에서 확인했습니다([기록](docs/windows-setup-issues.md)). 새 자동화의 실제/모의/미실행 구분은 [자동화 검증 기록](docs/automation-validation.md)에 따로 남깁니다. 이번 Windows 검증이 macOS 실제 실행을 대신하지 않습니다.
+- 기록된 Windows 환경에서 핵심 테스트 27개·백엔드 43개·브라우저 두 뷰포트가 통과했습니다. 특정 환경의 결과이며 버전 간 호환성을 보장하지 않습니다. 최신 task 자동화의 실제 macOS 실행은 아직 없고 Git Bash `bash -n`은 문법 검사만 했습니다. 이미지 생성 병렬 시나리오도 미실행입니다.
+- 과거 브라우저 실행은 확장 허용 목록에서 확인했습니다. 현재 축소한 기본값으로 브라우저 무인 실행을 검증한 것은 아니며 승인이 필요할 수 있습니다.
+
+## 작업 분배와 검증
+
+작은 작업은 지휘자가 단독 처리하고 독립 범위는 병렬로 맡깁니다. Node 18+가 있으면 전송 전에 쓰기 범위를 예약·비교합니다. `wait`는 보고 수신이며 실파일·테스트 확인 후 `check`와 `verify`로 검증을 기록합니다. 실패 수정은 `--fix-of`로 같은 계열에 최대 3회 지시합니다. 경로 문법과 한계는 [지휘 절차](.hc/docs/lead.md)를 따릅니다. 예약 명령은 지휘자 한 명이 순차로 실행해야 하며 공유 폴더 검사로 변경자를 식별하거나 동시 예약 경쟁을 안전하게 조정할 수는 없습니다.
+
+## 템플릿 발전 방향
+
+장기 목표는 Windows·macOS에서 자신의 프로젝트에 재사용할 수 있는 오픈소스 개발팀 템플릿입니다. 프로젝트별 스택·계약·역할은 `AGENTS.md` 5절에서 설정하고 `.hc/` 구조와 `[hc-task]`/`[hc-report]` 프로토콜을 유지합니다.
+
+- **현재 구현:** 역할별 분배, 보고 복구, 소유 범위 검사, 작업 계열별 수정 제한, 별도 검증 기록. Claude가 문서 절차를 수행하는 방식이며 상주 자율 스케줄러는 아닙니다.
+- **개발·검증 중:** 버전별 설치 호환성, 최신 macOS task 실행, 권한 선택, 재현 가능한 통합 검증.
+- **장기 방향:** Claude 중심 선택적 분배, Codex·Antigravity 협업, 피드백·재시도, 통합 검증, 파일 소유 관리, 이미지·개발 병렬 흐름 개선. 모든 시나리오가 완성되거나 안정적으로 작동한다는 뜻은 아닙니다.
+
+## 라이선스와 외부 도구
+
+이 저장소의 코드·문서는 [MIT 라이선스](LICENSE)를 따릅니다. Herdr·Claude Code·Codex·Antigravity·ego lite 등 외부 도구는 각자의 라이선스·서비스 약관을 따르며 이 저장소에서 재배포하지 않습니다. 선택 레이아웃 bercail은 위에서 작성자를 명시하며 파일 자체는 포함하지 않습니다. 외부 코드·에셋을 기여할 때는 출처와 라이선스 호환성을 먼저 확인하세요.

@@ -1,5 +1,7 @@
 # Windows 셋팅 진행 기록과 문제점
 
+> 이 문서는 당시 버전·설정의 개발 기록이다. 공개 템플릿의 현재 기본 허용 목록은 `hc send`만 포함하며, 아래 `node` 자동 실행 사례는 사용자가 선택한 확장 설정에서의 과거 검증이다. 현재 사용법은 [지휘 절차](../.hc/docs/lead.md)를 따른다. 사용자별 경로는 일반화했다.
+
 - 날짜: 2026-11-21
 - 환경: Windows 11 Pro 10.0.26200, Windows PowerShell 5.1.26100, Herdr 앱 + herdr-core `hc 0.1.21`
 - 도구: node v26.13.1, codex-cli 0.171.0, agy 1.5.14, Playwright 1.65.1
@@ -188,7 +190,7 @@
 
 ## Todo 테스트 프로젝트로 전체 흐름 검증 (2026-11-21)
 
-템플릿을 새 폴더 `C:\Users\hwh\herdr-todo-test`에 복사해(`.hc/`, `AGENTS.md`, `CLAUDE.md`, `.gitignore`) 실제 프로젝트처럼 진행했다.
+템플릿을 별도 테스트 폴더(예: `C:\Users\<사용자>\herdr-todo-test`)에 복사해(`.hc/`, `AGENTS.md`, `CLAUDE.md`, `.gitignore`) 실제 프로젝트처럼 진행했다.
 
 - 스택: Node 26, `node:http`, SQLite(`node:sqlite`, 외부 의존성 없음), 순수 HTML·CSS·JS, `node:test`, Playwright E2E
 - Claude: `db/schema.sql`, `src/db.js`(마이그레이션·`toTodo`), `contracts/api.md`, `AGENTS.md` 5절 작성

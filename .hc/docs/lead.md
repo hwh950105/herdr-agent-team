@@ -125,7 +125,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .hc\task.ps1 wait <작업ID>
 powershell -NoProfile -ExecutionPolicy Bypass -File .hc\task.ps1 nudge <작업ID>
 ```
 
-- Windows에서 agy에게 명령 실행을 시킬 때는 지시문에 `node <스크립트> [인자]`처럼 **허용 목록에 맞는 단독 명령**으로 적는다. `$env:X='...'; node ...` 형식은 허용 규칙에 맞지 않아 승인 창이 뜬다. agy의 Windows 샌드박스는 `localhost` 접속·Playwright 실행·`.hc\qa` 쓰기를 막으므로 이런 명령은 늘 샌드박스 밖에서 재시도되고, 그때 허용 규칙이 맞아야 승인 없이 진행된다.
+- Windows에서 agy에게 명령 실행을 시킬 때는 지시문에 `node <스크립트> [인자]`처럼 **단독 명령**으로 적는다. 기본 허용 목록에는 `node`가 없으므로 실행 승인이 필요할 수 있다. 사용자가 선택한 확장 허용 목록에서도 `$env:X='...'; node ...` 형식은 `node` 규칙에 맞지 않는다. 과거 검증 환경에서는 `localhost`·Playwright·`.hc\qa` 쓰기가 샌드박스에서 차단돼 밖에서 재시도했다. 현재 환경에서도 같은지 확인하고 승인 창은 사용자가 직접 처리한다.
 - Claude Code의 셸이 Git Bash여도 위 `powershell ...` 명령을 그대로 쓴다. Git Bash의 `hc read`는 한글이 깨지므로 화면은 PowerShell로 읽는다.
 - Windows 스크립트는 `.hc\hc.ps1`(공용 함수)을 함께 읽는다. 직접 실행하지 않는다. `jq`는 필요 없다.
 
@@ -161,10 +161,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .hc\task.ps1 nudge <작업ID
 ### Antigravity
 
 - 권한 우회 옵션 없이 띄우고, 기동 스크립트가 `agy --settings .hc/agy-settings.<mac|win>.json`으로 이 세션에만 허용 목록을 넘긴다. 목록을 바꾸면 agy를 다시 띄워야 적용된다.
-  - macOS: `command(hc send)`, `command(ego-browser)`, ego lite 앱 폴더 읽기
-  - Windows: `command(regex:hc send .*)`, `command(regex:node .*)`. PowerShell에서는 따옴표·한글이 섞인 명령이 접두사 규칙에 맞지 않아 정규식 형식을 쓴다.
+  - macOS 기본: `command(hc send)`만 허용한다.
+  - Windows 기본: `command(regex:hc send .*)`만 허용한다. PowerShell에서 따옴표·한글이 섞인 보고 명령을 위해 기존 정규식 형식을 유지한다.
+- 브라우저/Node 명령은 기본 자동 허용하지 않는다. 승인 창이 나오면 사용자에게 알리고 직접 선택하게 한다. 반복 검증을 위해 사용자가 명시적으로 승인한 경우에만 프로젝트의 위 설정 파일에 필요한 항목을 추가할 수 있다. Windows의 `command(regex:node .*)`는 임의 Node 코드 실행을 허용하므로 신뢰할 수 있는 프로젝트·검사한 스크립트에만 선택한다. macOS의 `command(ego-browser)`는 로그인된 실제 브라우저에 접근하며, 앱 읽기 경로도 자기 설치 위치를 확인해 필요한 범위만 추가한다. `command(*)`·권한 우회 옵션·전역 설정 자동 변경은 금지한다.
 - 허용 항목은 명령 이름과 하위 명령까지만 좁혀진다(`command(node <경로>)`처럼 파일 경로로는 안 된다). 허용 규칙은 샌드박스 밖 재시도에도 적용된다.
 - 자동 모드에서는 목록 밖 명령도 agy 샌드박스와 자체 안전 판정을 거쳐 실행될 수 있으므로 허용 목록을 유일한 보호 장치로 보지 않는다.
+- `hc send` 허용도 다른 로컬 터미널에 메시지를 보낼 수 있는 권한이다. 지시문의 `from=` 대상만 사용하고 개인 터미널에는 보내지 않는다. 공개 파일에 키를 넣거나 로그인된 브라우저 프로필을 복사하지 않는다.
 - 승인 창의 "always allow (Persist to settings.json)"은 전역 설정에 명령을 글자 그대로 저장한다. 고르지 않는다. 전역 설정(`~/.gemini/antigravity-cli/settings.json`)은 건드리지 않는다.
 
 ## 6. 이미지 생성 (art)
