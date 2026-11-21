@@ -10,11 +10,11 @@
 | # | 단계 | 결과 | 비고 |
 |---|---|---|---|
 | 1 | Herdr 앱 안인지 | 완료 | `HC_TERMINAL_ID=t2` |
-| 2 | herdr-core(`hc`) | 완료 | `hc 0.1.21` (`C:\Users\hwh\AppData\Local\Programs\herdr-core\hc.exe`) |
+| 2 | herdr-core(`hc`) | 완료 | `hc 0.1.21` (`C:\Users\<사용자>\AppData\Local\Programs\herdr-core\hc.exe`) |
 | 3 | 옛 `herdr` TUI 없음 | 완료 | 없음 |
 | 4 | Node.js | 완료 | v26.13.1 |
 | 5 | Codex CLI | 완료 | 0.171.0 (npm 전역, `codex.cmd`) |
-| 6 | Antigravity CLI | 완료 | 1.5.14 (`C:\Users\hwh\AppData\Local\agy\bin\agy.exe`) |
+| 6 | Antigravity CLI | 완료 | 1.5.14 (`C:\Users\<사용자>\AppData\Local\agy\bin\agy.exe`) |
 | 7 | Playwright | 조치 후 완료 | 처음엔 없음 → `npm i -D playwright`, `npx playwright install chromium` 실행 |
 | 8 | 로그인 | 완료 | `agy models` 목록 나옴. Codex는 신뢰 뒤 바로 입력 가능(로그인 상태) |
 | 9 | Codex 권한 모드 | 건너뜀 | `.hc\local.env` 없음 → 기본 샌드박스 |
@@ -25,7 +25,7 @@
 ## 확인된 사항 (README "검증 범위"의 미확인 항목)
 
 ### Windows의 `HC_TERMINAL_SOCKET`은 named pipe다
-- 실제 값: `\\.\pipe\herdr-core-hwh-default.sock`
+- 실제 값: `\\.\pipe\herdr-core-<사용자>-default.sock`
 - `up.ps1`은 이 경우 `--add-dir`를 붙이지 않도록 이미 분기돼 있다(정상 동작).
 - 남은 확인: Codex 샌드박스(`workspace-write`) 안에서 named pipe로 `hc send`가 되는지. 11단계에서 확인한다.
 
@@ -141,6 +141,12 @@
 - 영향: `AGENTS.md` 5절의 "권한 우회 모드는 사용자 승인 + `.hc/local.env` + 6절 기록" 절차를 거치지 않고 사실상 우회 모드가 됐다. `.hc/local.env`는 여전히 없어서 스크립트와 실제 상태가 다르다.
 - 제안: P5의 제안대로 첫 실행 권한 창을 스크립트가 감지하게 한다. Full Access를 계속 쓸 거면 `.hc/local.env`에 `CODEX_MODE=bypass`를 두고 6절에 승인 기록을 남긴다.
 
+#### P4·P5·P9 해결 (적용, macOS에서 확인)
+- P5: `up.ps1`·`up.sh`는 `idle`/`done` 판정 뒤, `task.ps1`·`task.sh`의 `send`·`nudge`는 보내기 직전에 현재 화면(`hc read`)을 보고 `Update Model Permissions`, `Trust this folder`, `Do you trust the contents`, `Requesting permission for`, `Run this command?`가 있으면 멈춘다. 화면 문구 감지는 macOS에서 가짜 창 문구로 확인했다.
+- P9: 2026-11-21 사용자가 Codex Full Access 사용을 결정했다. 그 Windows 환경의 `.hc\local.env`에 `CODEX_MODE=bypass`를 두고 `up.ps1`로 다시 띄운다(우회 모드에서는 권한 선택 창이 없다). 템플릿 기본값은 계속 샌드박스다.
+- P4: `up.ps1`은 `status.app`이 비어 있으면 `foreground.argv`에 `@openai\codex` 또는 `codex.js`가 있는지로도 Codex를 판정한다.
+- P6·P8은 macOS `task.sh`에도 같은 방식으로 넣었다.
+
 ### P10. README 12단계의 확인 기준이 현재 example.com 화면과 다르다 (중요도: 하)
 - 현상: 지금 `https://example.com`의 `<title>`은 `Example Domain`이지만 본문에는 그 헤딩이 없다(아이콘, 다국어 안내 문구, `Learn more` 링크만 있음). Claude가 스크린샷을 직접 열어 확인했다.
 - 영향: "화면에서 Example Domain이 보이는지" 시각 판정을 시키면 실패로 판단할 수 있다. 이번에는 agy가 title 일치와 본문 차이를 구분해 보고했다.
@@ -149,7 +155,7 @@
 ### 기타 (저장소 외부 또는 사소)
 - Codex 화면에 `Hook failed — unsupported plugin entry type: ...\.codex\plugins\cache\sisyphuslabs\omo\4.19.1\...codex-comment-checker`가 명령마다 반복된다. 사용자 전역 Codex 플러그인(omo) 문제라 이 저장소와는 무관하지만 화면 기록(`hc read`)을 많이 차지한다.
 - Git Bash에서 `hc read`를 하면 한글·기호가 깨진다(`??`, `쨌`). PowerShell에서는 정상이다.
-- Codex 화면에서 보고 경로가 `C:\Users\hwh\herdr-agent-team.hc\reports\...`처럼 `\`가 하나 빠져 보인다. 마크다운 렌더링 때문이며 실제 파일은 올바른 경로에 생겼다.
+- Codex 화면에서 보고 경로가 `C:\Users\<사용자>\herdr-agent-team.hc\reports\...`처럼 `\`가 하나 빠져 보인다. 마크다운 렌더링 때문이며 실제 파일은 올바른 경로에 생겼다.
 
 ## 진행 기록 (갱신)
 
@@ -166,9 +172,9 @@
 
 1. ~~**P6**~~ Codex 지시 미제출 → **해결**(`task.ps1` Enter 재시도, 종료 코드 5)
 2. ~~**P7**~~ agy 보고 승인 창 → **해결**(허용 규칙을 `command(regex:hc send .*)`로 변경, 위 "P7 해결" 참고). ~~**P8**~~ `wait`의 blocked 구분 → **해결**(종료 코드 4)
-3. **P5/P9** Codex 첫 실행 권한 창 감지와 Full Access 처리 방침 결정
+3. ~~**P5/P9**~~ Codex 첫 실행 권한 창 감지 → **해결**, Full Access → `CODEX_MODE=bypass`로 사용(사용자 결정)
 4. ~~**P1**~~ `.gitignore`에 `node_modules/` 추가 → **해결**
-5. P2·P3·P10 문서 수정, P4 대체 판정 보강
+5. ~~P2·P3·P10~~ 문서 수정 → **해결**, ~~P4~~ 대체 판정 보강 → **해결**
 
 ## 기능 확인 (P6·P7·P8 수정 후)
 

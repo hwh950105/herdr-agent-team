@@ -71,7 +71,7 @@ pick_name() {
 }
 
 check_terminal() {
-  local target=$1 role=$2 reason=$3 data summary status cwd hint key expected
+  local target=$1 role=$2 reason=$3 data summary status cwd hint key expected dialog
   data=$(hc get "$target") || { echo "경고: $target 조회 실패 ($reason)" >&2; return 1; }
   # agy는 foreground.name이 agy여도 status.app은 antigravity다.
   summary=$(jq -r '"state=\(.state // "-") cwd=\(.foreground.cwd // "-") agent=\(.status.app // .agent // .foreground.name // "-") status=\(.status.state // "-")"' <<<"$data") || return 1
@@ -105,7 +105,14 @@ check_terminal() {
     done
   fi
   case "$status" in
-    idle|done) ;;
+    idle|done)
+      # Codex 첫 실행의 권한 선택 창은 떠 있어도 idle로 보인다. 현재 화면에 사람이 골라야 하는 창이 있으면 멈춘다.
+      dialog=$(hc read "$target" 2>/dev/null | grep -o -E 'Update Model Permissions|Trust this folder|Do you trust the contents|Requesting permission for|Run this command\?' | head -1 || true)
+      if [ -n "$dialog" ]; then
+        echo "경고: $target 화면에 '$dialog' 창이 떠 있습니다 ($reason). 사용자가 그 터미널에서 직접 고른 뒤 다시 실행하세요." >&2
+        return 1
+      fi
+      ;;
     working)
       if [ "$reason" = 재사용 ]; then
         echo "$target 사용 중 ($reason)" >&2

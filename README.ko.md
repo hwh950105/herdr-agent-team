@@ -51,6 +51,7 @@ pi: 사용자 개인용 (개발 분담 제외)
 | `.hc/local.env` | 이 작업 환경 전용 설정(git 제외). `CODEX_MODE=bypass`가 있으면 Codex를 권한 우회 모드로 띄운다 |
 | `.hc/reports/` | 에이전트 보고서(git 제외) |
 | `.hc/qa/` | 브라우저 검증 스크린샷·증거(git 제외) |
+| `docs/windows-setup-issues.md` | Windows 실환경 셋팅 기록과 문제점·해결 |
 
 ## 빠른 시작: 에이전트에게 셋팅 맡기기
 
@@ -81,9 +82,9 @@ README.ko.md의 "에이전트용 셋팅 절차"에서 지금 OS에 맞는 표를
 | 7 | ego lite | `ego-browser --version` | **사용자 조치.** ego lite 앱을 설치하고 첫 실행 안내를 마친다 |
 | 8 | 로그인 | `agy models` (모델 목록). Codex는 사용자에게 묻는다 | **사용자 조치.** 별도 터미널에서 `codex`, `agy`를 한 번씩 실행해 로그인 |
 | 9 | Codex 권한 모드 | `cat .hc/local.env 2>/dev/null` | 기본은 샌드박스라 조치 없음. **사용자가 원할 때만** 승인 후 `CODEX_MODE=bypass`를 적고 `AGENTS.md` 6절에 승인 기록을 남긴다 |
-| 10 | 하위 터미널 기동 | `.hc/up.sh; echo "exit=$?"` (`exit=0`, 둘 다 `idle`) | 아래 "문제 해결" |
+| 10 | 하위 터미널 기동 | `.hc/up.sh; echo "exit=$?"` (`exit=0`, 둘 다 `idle`) | 아래 "문제 해결". **첫 실행은** Codex·agy가 폴더 신뢰 창을 띄워 `exit=1`로 끝나는 것이 정상이다. 사용자가 두 터미널에서 직접 고른 뒤 다시 실행한다 |
 | 11 | 통신 확인 | Antigravity에게 `[hc-task]`로 `echo "$HC_TERMINAL_ID"` 같은 짧은 작업을 보내고 `[hc-report]`가 오는지 본다 | `up.sh`가 `.hc/agy-settings.mac.json` 허용 목록을 넘기므로 승인 창이 뜨지 않아야 한다. 뜨면 화면을 사용자에게 보고하고, 필요한 명령을 허용 목록에 추가할지 묻는다 |
-| 12 | 브라우저 확인 | Antigravity에게 `브라우저: 필요`, `대상 URL: https://example.com`(읽기 전용)으로 제목(`Example Domain`)을 읽고 스크린샷을 `.hc/qa/<작업ID>/`에 저장하게 한다 | 실패하면 화면을 사용자에게 보고 |
+| 12 | 브라우저 확인 | Antigravity에게 `브라우저: 필요`, `대상 URL: https://example.com`(읽기 전용)으로 페이지 제목(`page.title()`이 `Example Domain`)을 확인하고 스크린샷을 `.hc/qa/<작업ID>/`에 저장하게 한다 | 실패하면 화면을 사용자에게 보고 |
 | 13 | (선택) bercail 테마 | `test -f ~/.config/herdr-app/layouts/bercail.json` | **사용자 확인.** 원하면 [레이아웃 절](#레이아웃-macos-bercail-windows-기본) 안내 |
 
 #### Windows
@@ -98,12 +99,12 @@ PowerShell 기준입니다. Claude Code는 **Herdr 앱 안의 터미널**에서 
 | 4 | Node.js | `node --version` | **사용자 조치.** `winget install OpenJS.NodeJS.LTS` |
 | 5 | Codex CLI | `Get-Command codex` | `npm i -g @openai/codex@latest` |
 | 6 | Antigravity CLI | `agy --version` | **사용자 조치.** Antigravity 앱을 설치하고 앱 안내에 따라 `agy`를 PATH에 등록 |
-| 7 | Playwright | `npx playwright --version` | 프로젝트 폴더에서 `npm i -D playwright` 후 `npx playwright install chromium` |
+| 7 | Playwright | `npx --no-install playwright --version` (없으면 설치를 묻지 않고 실패한다) | 프로젝트 폴더에서 `npm i -D playwright` 후 `npx playwright install chromium` |
 | 8 | 로그인 | `agy models` (모델 목록). Codex는 사용자에게 묻는다 | **사용자 조치.** 별도 터미널에서 `codex`, `agy`를 한 번씩 실행해 로그인 |
-| 9 | Codex 권한 모드 | `Get-Content .hc\local.env -ErrorAction SilentlyContinue` | macOS 9단계와 같다 |
-| 10 | 하위 터미널 기동 | `powershell -NoProfile -ExecutionPolicy Bypass -File .hc\up.ps1; "exit=$LASTEXITCODE"` (`exit=0`, 둘 다 `idle`) | 아래 "문제 해결" |
+| 9 | Codex 권한 모드 | `Get-Content .hc\local.env -ErrorAction SilentlyContinue` | macOS 9단계와 같다. 사용자가 승인했으면 `Set-Content -Encoding ASCII .hc\local.env 'CODEX_MODE=bypass'` |
+| 10 | 하위 터미널 기동 | `powershell -NoProfile -ExecutionPolicy Bypass -File .hc\up.ps1; "exit=$LASTEXITCODE"` (`exit=0`, 둘 다 `idle`) | 아래 "문제 해결". **첫 실행은** 폴더 신뢰 창 때문에 `exit=1`이 정상이다. 샌드박스 모드의 Codex는 이어서 권한 선택 창(`Update Model Permissions`)을 띄우는데, 상태가 `idle`로 보여도 스크립트가 화면 문구로 감지해 멈춘다. 사용자가 직접 고른다. Full Access를 고를 거라면 처음부터 9단계의 `CODEX_MODE=bypass`로 띄운다 |
 | 11 | 통신 확인 | Antigravity에게 `task.ps1 send`로 `$env:HC_TERMINAL_ID` 출력 같은 짧은 작업을 보내고(`AGENTS.md` 부록 B-2) `task.ps1 wait`가 0인지 본다 | `hc read <접두사>-agy --lines 100`으로 화면을 보고 사용자에게 보고. 승인 창이 뜨면 `.hc/agy-settings.win.json`에 필요한 명령을 추가할지 사용자에게 묻는다 |
-| 12 | 브라우저 확인 | Antigravity에게 `브라우저: 필요`, `대상 URL: https://example.com`으로 Playwright 스크립트를 `.hc/qa/<작업ID>/`에 만들어 제목을 읽고 스크린샷을 저장하게 한다 | 실패하면 화면을 사용자에게 보고 |
+| 12 | 브라우저 확인 | Antigravity에게 `브라우저: 필요`, `대상 URL: https://example.com`으로 Playwright 스크립트를 `.hc/qa/<작업ID>/`에 만들어 `page.title()`이 `Example Domain`인지 확인하고 스크린샷을 저장하게 한다. 본문에는 그 문구가 없을 수 있으므로 제목으로 판정한다 | 실패하면 화면을 사용자에게 보고 |
 
 #### 기동 스크립트 문제 해결 (공통)
 
@@ -111,7 +112,7 @@ PowerShell 기준입니다. Claude Code는 **Herdr 앱 안의 터미널**에서 
 
 | 화면 | 처리 |
 |---|---|
-| `Trust this folder?` 같은 폴더 신뢰 창 | 키를 대신 누르지 않는다. 사용자가 그 터미널에서 직접 고른 뒤 스크립트를 다시 실행한다 |
+| `Trust this folder?` 같은 폴더 신뢰 창, Codex `Update Model Permissions` 권한 선택 창 | 키를 대신 누르지 않는다. 사용자가 그 터미널에서 직접 고른 뒤 스크립트를 다시 실행한다 |
 | 명령 실행 권한 창 | 키를 대신 누르지 않는다. 사용자에게 고르게 한다 |
 | 로그인 화면 | 로그인 단계로 돌아가 사용자에게 요청한다 |
 | 업데이트 안내처럼 무해한 창 | `esc`로 넘긴 뒤 스크립트를 다시 실행한다 |
@@ -158,4 +159,5 @@ macOS의 Herdr.app에서는 커뮤니티 레이아웃 **bercail**(작성자 simo
 ## 검증 범위
 
 - `.hc/up.sh`(macOS)는 가짜 `hc`로 재사용·불일치·중복·주입값·대기 시간 초과 등을 모의 검사했고, 실제 Herdr.app에서 Codex·Antigravity 기동, `hc` 보고, ego lite 브라우저 검증을 확인했습니다.
-- `.hc/up.ps1`·`.hc/task.ps1`(Windows)은 macOS에서 확인한 `hc` JSON 형식을 그대로 PowerShell로 옮겼습니다. **실제 Windows 환경 검증은 아직 하지 않았습니다.** 특히 Windows에서 `HC_TERMINAL_SOCKET`의 형태(파일 경로인지 named pipe인지)와 Codex 샌드박스 안의 `hc send` 동작은 첫 실행 때 확인해야 합니다.
+- `.hc/up.ps1`·`.hc/task.ps1`(Windows)은 Windows 11 + PowerShell 5.1 + Herdr 앱에서 기동, Codex 백엔드 작업, Antigravity 화면 구현과 Playwright 검증, 보고 파일과 `hc send` 보고를 확인했습니다. 진행 기록과 문제점·해결은 [`docs/windows-setup-issues.md`](docs/windows-setup-issues.md)에 있습니다. Windows의 `HC_TERMINAL_SOCKET`은 named pipe입니다.
+- 아직 확인하지 못한 것: 샌드박스 모드 Codex 안에서 named pipe로 `hc send`가 되는지(Full Access로만 확인), 권한 창 감지·Codex argv 판정의 Windows 실환경 동작(macOS에서만 확인).

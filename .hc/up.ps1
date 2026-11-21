@@ -77,13 +77,24 @@ function Test-Terminal([string]$Target, [string]$Role, [string]$Reason) {
   $Hint = if ($Status -eq '-') { ' 신뢰·권한 창일 수 있음.' } else { '' }
   # agy는 status.app이 antigravity다. 앱 감지가 늦으면 foreground 이름(codex.exe 등)으로 본다.
   $Want = if ($Role -eq 'agy') { 'antigravity' } else { 'codex' }
-  $RoleOk = ($App -eq $Want) -or (-not $App -and ($Fg -replace '\.(exe|cmd)$', '') -ieq $Role)
+  # Windows의 npm 설치 Codex는 node.exe로 보이므로 argv에 codex 패키지·스크립트가 있는지도 본다.
+  $Argv = (@(Get-Field $D 'foreground.argv') | ForEach-Object { "$_" }) -join ' '
+  $FgRole = ($Fg -replace '\.(exe|cmd)$', '') -ieq $Role
+  if ($Role -eq 'codex' -and $Argv -match '@openai[\\/]codex|[\\/]codex(\.js|\.exe)?(\s|$)') { $FgRole = $true }
+  $RoleOk = ($App -eq $Want) -or (-not $App -and $FgRole)
   if ($State -ne 'live' -or -not $Cwd -or $Cwd -ine $Root -or -not $RoleOk) {
     [Console]::Error.WriteLine("경고: $Target 재사용·준비 조건 불일치 ($Reason; $Summary).$Hint hc read $Target --lines 60 으로 확인하세요.")
     return $false
   }
   switch ($Status) {
-    { $_ -in 'idle', 'done' } { return $true }
+    { $_ -in 'idle', 'done' } {
+      $Dlg = Find-Dialog $Target
+      if ($Dlg) {
+        [Console]::Error.WriteLine("경고: $Target 화면에 '$Dlg' 창이 떠 있습니다 ($Reason). 상태는 $Status 지만 입력하면 창에 들어갑니다. 사용자가 그 터미널에서 직접 고른 뒤 다시 실행하세요.")
+        return $false
+      }
+      return $true
+    }
     'working' {
       if ($Reason -eq '재사용') { [Console]::Error.WriteLine("$Target 사용 중 ($Reason)"); return $true }
       [Console]::Error.WriteLine("경고: $Target 신규 기동 준비 미완료 ($Reason; $Summary). hc read $Target --lines 60 으로 확인하세요.")

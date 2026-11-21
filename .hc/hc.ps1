@@ -70,6 +70,16 @@ function Get-NormPath([string]$Path) {
   try { return (Resolve-Path -LiteralPath $Path -ErrorAction Stop).ProviderPath.TrimEnd('\') } catch { return '' }
 }
 
+# 사람이 골라야 하는 창(권한·신뢰·명령 승인)이 현재 화면에 떠 있으면 그 문구를, 없으면 $null.
+# Codex 첫 실행의 권한 선택 창은 떠 있어도 상태가 idle로 보이므로 상태만으로는 알 수 없다.
+$Script:DialogPatterns = @('Update Model Permissions', 'Trust this folder', 'Do you trust the contents', 'Requesting permission for', 'Run this command\?')
+function Find-Dialog([string]$Target) {
+  $R = Invoke-Hc @('read', $Target)
+  if ($R.Code -ne 0) { return $null }
+  foreach ($Pat in $Script:DialogPatterns) { if ($R.Text -match $Pat) { return ($Pat -replace '\\', '') } }
+  return $null
+}
+
 # 실행 파일 전체 경로. npm 전역 설치는 .cmd 이므로 .exe → .cmd → .bat 순으로 찾는다.
 function Resolve-Program([string]$Name) {
   $All = @(Get-Command $Name -CommandType Application -All -ErrorAction SilentlyContinue)

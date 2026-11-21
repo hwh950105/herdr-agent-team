@@ -87,6 +87,7 @@ switch ($Cmd) {
     $S = Get-State $T
     if ($S -eq 'working') { Fail "$T 작업 중입니다. 먼저 끝나기를 기다리세요" }
     if ($S -ne 'idle' -and $S -ne 'done') { Fail "$T 상태=$S. hc read $T --lines 60 으로 화면을 확인하세요" }
+    $Dlg = Find-Dialog $T; if ($Dlg) { Fail "$T 화면에 '$Dlg' 창이 떠 있습니다. 보내면 본문이 창에 입력됩니다. 사용자가 직접 고른 뒤 다시 보내세요" }
     $Msg = "[hc-task] id=$Id from=$Me`n$Body`n$(Get-Footer $Id)"
     [IO.File]::WriteAllText((Join-Path $Tasks "$Id.md"), $Msg, $Utf8)   # 원문 보관: 다시 보낼 때 상대가 다시 읽을 수 있게
     $Before = Get-Field (Get-Terminal $T) 'turn'; $Before = if ($null -eq $Before) { 0 } else { [int]$Before }
@@ -150,6 +151,7 @@ switch ($Cmd) {
     if ($N -ge 2) { Fail "이미 2번 다시 보냈습니다. 화면을 확인하고 사용자에게 알리세요 (hc read $T --lines 100)" }
     $S = Get-State $T
     if ($S -ne 'idle' -and $S -ne 'done') { Fail "$T 상태=$S. 다시 보낼 수 없습니다" }
+    $Dlg = Find-Dialog $T; if ($Dlg) { Fail "$T 화면에 '$Dlg' 창이 떠 있습니다. 보내면 본문이 창에 입력됩니다. 사용자가 직접 고른 뒤 다시 보내세요" }
     $Orig = Join-Path $Tasks "$Id.md"
     $Msg = "[hc-task] id=$Id from=$Me (이어서)`n이 작업의 보고 파일이 아직 없다. 원래 지시 원문은 $Orig 에 있다. 그 지시의 남은 단계가 있으면 이어서 끝까지 하고, 이미 끝났으면 바로 보고한다.`n$(Get-Footer $Id)"
     $Before = Get-Field (Get-Terminal $T) 'turn'; $Before = if ($null -eq $Before) { 0 } else { [int]$Before }

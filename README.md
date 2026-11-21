@@ -50,6 +50,7 @@ Both use the same Herdr app and `hc` commands; the message format (`[hc-task]` /
 | `.hc/tasks/` | Sent task texts and wait state (git-ignored) |
 | `.hc/local.env` | Local-only settings (git-ignored). `CODEX_MODE=bypass` runs Codex without its sandbox |
 | `.hc/reports/`, `.hc/qa/` | Agent reports and browser evidence (git-ignored) |
+| `docs/windows-setup-issues.md` | Windows setup log, issues and fixes (Korean) |
 
 ## Quick start
 
@@ -101,4 +102,5 @@ The launchers start Codex **sandboxed by default** (`-s workspace-write -a never
 ## What has been verified
 
 - `.hc/up.sh` (macOS) was tested against a fake `hc` and in real Herdr.app runs (agent start-up, `hc` reports, ego lite browser checks).
-- `.hc/up.ps1` and `.hc/task.ps1` (Windows) port the macOS scripts to PowerShell using the same `hc` JSON. **They have not yet been run on a real Windows machine**; check the form of `HC_TERMINAL_SOCKET` and `hc send` from inside the Codex sandbox on first run.
+- `.hc/up.ps1` and `.hc/task.ps1` (Windows) were run on Windows 11 + PowerShell 5.1 + the Herdr app: start-up, a Codex backend task, an Antigravity UI task with Playwright checks, and report files plus `hc send` reports. Notes and fixes are in [`docs/windows-setup-issues.md`](docs/windows-setup-issues.md) (Korean). On Windows `HC_TERMINAL_SOCKET` is a named pipe.
+- Not yet confirmed: `hc send` from a sandboxed Codex on Windows (only tested with Full Access), and the dialog detection / Codex argv check on a real Windows machine (tested on macOS only).
