@@ -30,6 +30,7 @@ function Get-Footer([string]$Id) {
 - 단계가 여러 개면 모든 단계를 끝낸 뒤 한 번만 보고한다. 단계 사이에서 차례를 끝내지 않는다.
 - 끝까지 못 하면(막힘·실패·범위 밖·질문) 그 시점까지의 결과로 status=blocked 또는 failed 보고를 한다.
 - 보고 없이 차례를 끝내지 않는다. hc send 가 실패해도 1)의 파일은 반드시 남긴다.
+- 착수·진행 상황을 hc send 로 따로 알리지 않는다. 지시한 쪽에 보내는 메시지는 마지막 보고 한 번뿐이다.
 "@
 }
 
@@ -121,8 +122,9 @@ switch ($Cmd) {
       if ($null -eq $D) { Write-Output "점검 필요: $T 조회 실패(종료됐을 수 있음). hc ls --all 로 확인하세요"; exit 4 }
       $S = "$(Get-Field $D 'status.state')"; if (-not $S) { $S = '-' }
       $Cur = Get-Field $D 'turn'; $Cur = if ($null -eq $Cur) { 0 } else { [int]$Cur }
-      if ($S -ne 'working' -and $Cur -gt $Turn) { break }
+      # blocked 검사를 차례 종료 판정보다 먼저 한다. 승인 창에서 멈춘 것을 '보고 누락'으로 오판하지 않게.
       if ($S -notin 'working', 'idle', 'done') { Write-Output "점검 필요: $T 상태=$S (승인·신뢰 창일 수 있음). hc read $T --lines 60 으로 보고 사용자에게 알리세요"; exit 4 }
+      if ($S -ne 'working' -and $Cur -gt $Turn) { break }
       $Left = [int][Math]::Floor(($Deadline - (Get-Date)).TotalSeconds)
       if ($Left -le 0) { Write-Output "시간 초과: $T 아직 끝나지 않았습니다(완료 아님). 다시 task.ps1 wait $Id"; exit 3 }
       if ($S -eq 'working') { $null = Invoke-Hc @('wait', $T, '--json', '--timeout', "$([Math]::Min($Left, 300))") }

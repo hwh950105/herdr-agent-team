@@ -185,3 +185,45 @@
 | `task.ps1 wait` | 두 작업 | 보고 파일 기반 완료 판단, P8 상태 재확인 | 둘 다 `exit 0` |
 
 남은 확인 사항: 샌드박스(`workspace-write`) Codex에서 named pipe로 `hc send`가 되는지(현재 Full Access라 미확인), P8의 `blocked` 경로 실제 재현, macOS `task.sh`에 같은 수정 반영.
+
+## Todo 테스트 프로젝트로 전체 흐름 검증 (2026-11-21)
+
+템플릿을 새 폴더 `C:\Users\hwh\herdr-todo-test`에 복사해(`.hc/`, `AGENTS.md`, `CLAUDE.md`, `.gitignore`) 실제 프로젝트처럼 진행했다.
+
+- 스택: Node 26, `node:http`, SQLite(`node:sqlite`, 외부 의존성 없음), 순수 HTML·CSS·JS, `node:test`, Playwright E2E
+- Claude: `db/schema.sql`, `src/db.js`(마이그레이션·`toTodo`), `contracts/api.md`, `AGENTS.md` 5절 작성
+- Codex(t7, **샌드박스** `workspace-write`): `src/server.js` API + `test/api.test.js` 41개, Claude 코드 교차 리뷰
+- Antigravity(t8): `public/` 화면 + `e2e/todo.e2e.mjs`, 실제 서버(`hc run --bg`로 Claude가 띄움) 대상 E2E
+
+### 결과
+| 항목 | 결과 |
+|---|---|
+| 복사한 폴더에서 `up.ps1` | `exit=0`. 신뢰 창 없음(상위 폴더가 이미 신뢰됨), Codex 권한 선택 창도 이번엔 안 뜸 → 진짜 샌드박스로 기동 |
+| Codex 교차 리뷰 | 5건 지적(NUL 문자와 SQLite `length()` 불일치, 길이 단위 모호, JSON 규칙 범위, `user_version` 초과, 실패 시 연결 미종료). 모두 반영: 계약에 코드 포인트 기준·제어문자 금지·오류 우선순위 명시, `src/db.js` 수정 |
+| 백엔드 테스트 | Claude가 다시 실행해 41/41 통과 |
+| E2E | Claude가 다시 실행해 `exit 0`, 스크린샷(새로고침 후 완료 유지, 빈 제목 오류 표시) 직접 확인 |
+| P6 Enter 재시도 | Codex에 보낸 3건 모두 첫 Enter를 놓쳤고 3건 모두 자동 재시도로 시작됨 |
+
+### 새로 찾은 문제와 수정
+
+#### P11. `wait`가 승인 창에서 멈춘 대상을 '보고 누락(2)'으로 판정 (중요도: 상, 수정·확인 완료)
+- 현상: agy가 승인 창에서 `blocked`(turn 1→2)인데 `wait`가 `보고 누락`, `exit 2`. 안내대로 `nudge`하면 승인 창에 입력될 위험.
+- 원인: 루프에서 "작업 중이 아니고 turn이 늘었으면 끝" 판정이 `blocked` 검사보다 먼저였다. macOS `task.sh`도 같은 순서.
+- 수정: 두 스크립트 모두 `blocked` 등 검사를 먼저 하도록 순서 변경. 재실행 시 `점검 필요: t8 상태=blocked`, `exit 4` 확인.
+
+#### P12. agy에게 `$env:X=...; node ...` 형식을 시키면 승인 창이 뜬다 (중요도: 상, 수정·확인 완료)
+- 현상: `$env:BASE_URL='http://localhost:3456'; node e2e/todo.e2e.mjs` 실행 때 승인 창("local server that was not started by the agent").
+- 원인: 명령이 `node`로 시작하지 않아 `command(regex:node .*)`에 맞지 않음. 게다가 agy의 Windows 샌드박스는 `localhost` 접속, Playwright 실행, `.hc\qa` 폴더 생성을 막아서 이런 명령은 항상 샌드박스 밖 재시도가 필요하다.
+- 수정: `.hc/docs/browser-qa.md`에 "Windows에서는 `node <스크립트> [인자]` 한 명령만 단독 실행, 설정은 인자로" 규칙 추가. `.hc/docs/lead.md` 3절에 지시문 작성 요령 추가.
+- 확인: 같은 E2E를 `node e2e/todo.e2e.mjs` 단독으로 다시 시키자(todo-e2e-2) 취소 없이 통과했다. 다만 agy 보고에 샌드박스 밖 실행까지 약 13초가 걸렸다고 적혀 있어, 그 사이 사용자 승인이 있었는지는 사용자 확인이 필요하다.
+
+#### P13. Windows Codex 셸에서 `npm test`가 실행 정책에 막힘 (중요도: 하, 문서화)
+- 현상: Codex 보고 "PowerShell이 npm.ps1 실행을 차단". Codex가 스스로 `npm.cmd test`로 우회했다.
+- 수정: `.hc/docs/lead.md` 5절에 "지시문의 명령은 `npm.cmd test`처럼 `.cmd`로 적는다" 추가.
+
+#### P14. Codex가 착수·진행 메시지를 `hc send`로 따로 보낸다 (중요도: 중, 수정)
+- 현상: 최종 보고 전에 "착수…", "진행: 30개 통과…" 메시지가 두 번 왔다. 메시지마다 Claude의 차례가 깨어난다.
+- 수정: 작업 스크립트의 필수 마무리(`task.ps1`·`task.sh`)와 `AGENTS.md` 2절에 "착수·진행 상황을 따로 보내지 않는다. 메시지는 마지막 보고 한 번" 추가. 후속 지시(todo-api-2)에 같은 문장을 넣었을 때는 중간 메시지가 없었다.
+
+#### 확인된 사항
+- **샌드박스 Codex의 `hc send`**: named pipe로 정상 동작(t7이 보낸 메시지가 모두 도착). `.hc/docs/lead.md`의 "아직 확인하지 못했다" 문구를 고쳤다.

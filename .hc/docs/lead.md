@@ -86,6 +86,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .hc\task.ps1 wait <작업ID>
 powershell -NoProfile -ExecutionPolicy Bypass -File .hc\task.ps1 nudge <작업ID>
 ```
 
+- Windows에서 agy에게 명령 실행을 시킬 때는 지시문에 `node <스크립트> [인자]`처럼 **허용 목록에 맞는 단독 명령**으로 적는다. `$env:X='...'; node ...` 형식은 허용 규칙에 맞지 않아 승인 창이 뜬다. agy의 Windows 샌드박스는 `localhost` 접속·Playwright 실행·`.hc\qa` 쓰기를 막으므로 이런 명령은 늘 샌드박스 밖에서 재시도되고, 그때 허용 규칙이 맞아야 승인 없이 진행된다.
 - Claude Code의 셸이 Git Bash여도 위 `powershell ...` 명령을 그대로 쓴다. Git Bash의 `hc read`는 한글이 깨지므로 화면은 PowerShell로 읽는다.
 - Windows 스크립트는 `.hc\hc.ps1`(공용 함수)을 함께 읽는다. 직접 실행하지 않는다. `jq`는 필요 없다.
 
@@ -112,7 +113,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .hc\task.ps1 nudge <작업ID
 
 - 기본은 샌드박스(`-s workspace-write -a never`, 네트워크 허용, `--no-daemon`). 샌드박스에서는 `.agents/`, `.codex/`, `.git/`이 읽기 전용이다.
   - macOS: `~/.local/state/herdr-core` 쓰기 허용, `HC_TERMINAL_ID`/`HC_TERMINAL_SOCKET`을 `-c shell_environment_policy.set...`으로 주입한다.
-  - Windows: `HC_TERMINAL_SOCKET`이 파일 경로이면 그 폴더를 `--add-dir`로 쓰기 허용에 넣는다. 실제 Windows에서는 named pipe(`\\.\pipe\herdr-core-...`)여서 붙지 않았다. npm 설치 `codex.cmd`는 `up.ps1`이 실제 경로를 찾아 넘긴다. 샌드박스 안에서 `hc send`가 되는지는 아직 확인하지 못했고, 막혀도 보고 파일로 완료를 확인할 수 있다.
+  - Windows: `HC_TERMINAL_SOCKET`이 파일 경로이면 그 폴더를 `--add-dir`로 쓰기 허용에 넣는다. 실제 Windows에서는 named pipe(`\\.\pipe\herdr-core-...`)여서 붙지 않았다. npm 설치 `codex.cmd`는 `up.ps1`이 실제 경로를 찾아 넘긴다. 샌드박스(`workspace-write`) Codex에서도 named pipe로 `hc send`가 동작함을 확인했다(2026-11-21). 막히더라도 보고 파일로 완료를 확인할 수 있다.
+  - Windows Codex의 PowerShell은 실행 정책 때문에 `npm`(`npm.ps1`)이 막힐 수 있다. 지시문의 명령은 `npm.cmd test`처럼 `.cmd`로 적는다.
 - 우회 모드(`--dangerously-bypass-approvals-and-sandbox`)는 `.hc/local.env`에 `CODEX_MODE=bypass` 한 줄이 있을 때만 쓴다. 사용자 승인 뒤에만 만들고, 승인 기록은 `AGENTS.md` 5절에 적는다. `.hc/local.env`는 git에 올라가지 않으므로 복사한 프로젝트는 샌드박스로 시작한다.
 - 샌드박스 Codex가 첫 실행 권한 선택 창에서 Full Access로 바뀌면 사실상 우회 모드다. 그렇게 쓸 거면 처음부터 `CODEX_MODE=bypass`로 띄운다.
 - 우회 모드에서는 범위·승인 규칙이 도구로 강제되지 않으므로 Codex의 변경을 실제 파일로 확인한다.
