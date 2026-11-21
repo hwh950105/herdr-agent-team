@@ -1,8 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "command(hc send)",
-      "command(node)"
+      "command(regex:hc send .*)",
+      "command(regex:node .*)"
     ]
   }
 }

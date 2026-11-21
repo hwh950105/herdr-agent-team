@@ -3,3 +3,4 @@
 .hc/qa/
 .hc/local.env
 .hc/tasks/
+node_modules/

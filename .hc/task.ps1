@@ -4,7 +4,8 @@
 #   task.ps1 nudge <작업ID>                       보고 없이 멈춘 대상에게 이어서 끝내고 보고하라고 다시 보낸다 (최대 2번)
 # 실행: powershell -NoProfile -ExecutionPolicy Bypass -File .hc\task.ps1 <명령> ...
 # wait 종료 코드: 0 보고 있음 / 2 보고 누락(차례는 끝남) / 3 시간 초과(아직 작업 중, 완료 아님)
-#                 4 점검 필요(blocked·종료 등) / 1 사용법·조회 오류
+#                 4 점검 필요(blocked·종료 등. 보고 파일이 있어도 대상이 blocked면 4) / 1 사용법·조회 오류
+# send·nudge 종료 코드: 0 보냄(차례 시작 확인) / 5 미제출(Enter를 2번 더 눌러도 차례가 시작되지 않음) / 1 오류
 # 보고 메시지(hc send)는 빠질 수 있으므로 완료 판단은 보고 파일(.hc\reports\<작업ID>.md)로 한다.
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$A)
 
@@ -39,6 +40,28 @@ function Send-Msg([string]$Target, [string]$Text) {   # 보내고 turn 을 돌�
   if ($null -eq $Turn) { return -1 } else { return [int]$Turn }
 }
 
+# P6: Codex 등은 hc send 의 붙여넣기 뒤 Enter를 놓칠 때가 있다(입력란에 본문만 남음).
+# 보낸 뒤 상대가 차례를 시작했는지(working 또는 turn 증가) 확인하고, 아니면 hc keys 로 Enter를 다시 누른다.
+function Confirm-Submitted([string]$Target, [int]$Before) {
+  for ($Try = 0; $Try -le 2; $Try++) {
+    $Until = (Get-Date).AddSeconds(6)
+    while ((Get-Date) -lt $Until) {
+      $D = Get-Terminal $Target
+      if ($null -eq $D) { return $false }
+      $S = "$(Get-Field $D 'status.state')"
+      $Cur = Get-Field $D 'turn'; $Cur = if ($null -eq $Cur) { 0 } else { [int]$Cur }
+      if ($S -eq 'working' -or $Cur -gt $Before) { return $true }
+      if ($S -and $S -notin 'idle', 'done') { return $true }   # blocked 등은 wait 가 점검 필요로 알린다
+      Start-Sleep -Milliseconds 700
+    }
+    if ($Try -lt 2) {
+      [Console]::Error.WriteLine("알림: $Target 이(가) 지시를 시작하지 않아 Enter를 다시 누릅니다 ($($Try + 1)/2)")
+      $null = Invoke-Hc @('keys', $Target, 'enter')
+    }
+  }
+  return $false
+}
+
 function Read-Env([string]$Id) {
   $F = Join-Path $Tasks "$Id.env"
   if (-not (Test-Path -LiteralPath $F)) { Fail "보낸 기록이 없습니다: $Id" }
@@ -66,8 +89,13 @@ switch ($Cmd) {
     if ($S -ne 'idle' -and $S -ne 'done') { Fail "$T 상태=$S. hc read $T --lines 60 으로 화면을 확인하세요" }
     $Msg = "[hc-task] id=$Id from=$Me`n$Body`n$(Get-Footer $Id)"
     [IO.File]::WriteAllText((Join-Path $Tasks "$Id.md"), $Msg, $Utf8)   # 원문 보관: 다시 보낼 때 상대가 다시 읽을 수 있게
+    $Before = Get-Field (Get-Terminal $T) 'turn'; $Before = if ($null -eq $Before) { 0 } else { [int]$Before }
     $Turn = Send-Msg $T $Msg
     Write-Env $Id $T $Turn 0
+    if (-not (Confirm-Submitted $T $Before)) {
+      Write-Output "미제출: $T 에 본문은 보냈지만 차례가 시작되지 않았습니다. hc read $T --lines 40 으로 입력란을 확인하세요."
+      exit 5
+    }
     Write-Output "보냄: $T id=$Id (turn=$Turn). 기다리기: task.ps1 wait $Id"
     exit 0
   }
@@ -98,6 +126,12 @@ switch ($Cmd) {
     if (Test-Report $Rp) {
       Write-Output "보고 있음: $(Get-Content -LiteralPath $Rp -TotalCount 1 -Encoding UTF8)"
       Write-Output "파일: $Rp"
+      # P8: 보고 파일을 쓴 뒤 보고 명령 승인 창 등에서 멈춘 경우를 구분한다.
+      $S = Get-State $T
+      if ($S -notin 'idle', 'done') {
+        Write-Output "점검 필요: 보고 파일은 있지만 $T 상태=$S (보고 명령 승인 창일 수 있음). hc read $T --lines 40 으로 보고 사용자에게 알리세요"
+        exit 4
+      }
       exit 0
     }
     Write-Output "보고 누락: $T 의 차례가 끝났지만 $Rp 가 없습니다. 화면 마지막 부분:"
@@ -118,8 +152,10 @@ switch ($Cmd) {
     if ($S -ne 'idle' -and $S -ne 'done') { Fail "$T 상태=$S. 다시 보낼 수 없습니다" }
     $Orig = Join-Path $Tasks "$Id.md"
     $Msg = "[hc-task] id=$Id from=$Me (이어서)`n이 작업의 보고 파일이 아직 없다. 원래 지시 원문은 $Orig 에 있다. 그 지시의 남은 단계가 있으면 이어서 끝까지 하고, 이미 끝났으면 바로 보고한다.`n$(Get-Footer $Id)"
+    $Before = Get-Field (Get-Terminal $T) 'turn'; $Before = if ($null -eq $Before) { 0 } else { [int]$Before }
     $Turn = Send-Msg $T $Msg
     Write-Env $Id $T $Turn ($N + 1)
+    if (-not (Confirm-Submitted $T $Before)) { Write-Output "미제출: $T 에 다시 보냈지만 차례가 시작되지 않았습니다. hc read $T --lines 40 으로 확인하세요."; exit 5 }
     Write-Output "다시 보냄($($N + 1)/2): $T id=$Id. 기다리기: task.ps1 wait $Id"
     exit 0
   }
