@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "command(hc)",
+      "command(node)",
+      "command(npx)"
+    ]
+  }
+}

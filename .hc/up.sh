@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Codex·pi 하위 터미널을 띄운다. Herdr.app 안의 Claude 터미널에서 실행한다.
-# 이름: <접두사>-codex, <접두사>-pi. 기존 자식은 작업 폴더·역할·상태를 확인한다.
+# macOS용: Codex·agy 하위 터미널을 띄운다. Herdr.app 안의 Claude 터미널에서 실행한다. (Windows는 up.ps1)
+# 이름: <접두사>-codex, <접두사>-agy. 기존 자식은 작업 폴더·역할·상태를 확인한다.
 # 전제: hc run 은 자식 터미널에 그 터미널 자신의 HC_TERMINAL_ID/HC_TERMINAL_SOCKET 을 넣어 준다.
 #       (Codex 안에서 `echo $HC_TERMINAL_ID` 가 Codex 자기 주소인지로 확인할 수 있다)
 set -euo pipefail
 
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
+ROOT=$(cd -P "$(dirname "$0")/.." && pwd -P)
 
 # 프로젝트 접두사 18자, 전체 이름은 hc 제한(32자) 내. 남는 게 없으면 project
 P=$(basename "$ROOT" | tr '[:upper:]' '[:lower:]' | LC_ALL=C tr -c 'a-z0-9_-' '-' | tr -s '-' | sed 's/^-//; s/-$//' | cut -c1-18)
@@ -16,12 +16,34 @@ if [ "${1:-}" = --prefix ] && [ "$#" -eq 1 ]; then
 fi
 [ "$#" -eq 0 ] || { echo "사용법: $0 [--prefix]" >&2; exit 1; }
 
-for CMD in hc jq codex pi; do
+for CMD in hc jq codex agy; do
   command -v "$CMD" >/dev/null || { echo "경고: 필요한 명령 없음: $CMD" >&2; exit 1; }
 done
+command -v ego-browser >/dev/null || echo "경고: ego-browser 없음. 브라우저 QA 전에 설치하세요." >&2
 : "${HC_TERMINAL_ID:?Herdr.app 밖에서 실행 중입니다 (HC_TERMINAL_ID 없음)}"
+: "${HC_TERMINAL_SOCKET:?HC_TERMINAL_SOCKET 없음: Herdr.app 실행 환경을 확인하세요}"
 ME=$HC_TERMINAL_ID
 mkdir -p "$ROOT/.hc/reports"
+
+# 로컬 승인 값만 읽는다. 셸 코드나 다른 환경 변수는 실행·적용하지 않는다.
+CODEX_MODE=sandbox
+MODE_SEEN=0
+if [ -f "$ROOT/.hc/local.env" ]; then
+  while IFS= read -r LINE || [ -n "$LINE" ]; do
+    LINE=${LINE%$'\r'}
+    case "$LINE" in
+      CODEX_MODE=*)
+        [ "$MODE_SEEN" -eq 0 ] || { echo "경고: .hc/local.env의 CODEX_MODE 중복" >&2; exit 1; }
+        MODE_SEEN=1
+        CODEX_MODE=${LINE#CODEX_MODE=}
+        ;;
+    esac
+  done < "$ROOT/.hc/local.env"
+fi
+case "$CODEX_MODE" in
+  sandbox|bypass) ;;
+  *) echo "경고: .hc/local.env의 CODEX_MODE는 sandbox 또는 bypass여야 합니다." >&2; exit 1 ;;
+esac
 
 TERMINALS=$(hc ls) || { echo "경고: hc ls 조회 실패" >&2; exit 1; }
 jq -e '.terminals | type == "array"' <<<"$TERMINALS" >/dev/null || { echo "경고: hc ls 결과 형식 이상" >&2; exit 1; }
@@ -49,37 +71,57 @@ pick_name() {
 }
 
 check_terminal() {
-  local target=$1 role=$2 reason=$3 data summary status
+  local target=$1 role=$2 reason=$3 data summary status cwd hint key expected
   data=$(hc get "$target") || { echo "경고: $target 조회 실패 ($reason)" >&2; return 1; }
-  # hc get은 agent 대신 status.app을 제공한다(pi의 프로세스 이름은 node).
+  # agy는 foreground.name이 agy여도 status.app은 antigravity다.
   summary=$(jq -r '"state=\(.state // "-") cwd=\(.foreground.cwd // "-") agent=\(.status.app // .agent // .foreground.name // "-") status=\(.status.state // "-")"' <<<"$data") || return 1
-  if ! jq -e --arg root "$ROOT" --arg role "$role" '
-    .state=="live" and .foreground.cwd==$root and
-    (.status.app // .agent // .foreground.name)==$role' <<<"$data" >/dev/null; then
-    echo "경고: $target 재사용·준비 조건 불일치 ($reason; $summary). hc read $target 으로 확인하세요." >&2
-    return 1
-  fi
-  # Codex는 shell_environment_policy 로 받은 HC_TERMINAL_ID 가 자기 주소여야 보고가 제자리로 간다.
-  # -c 바로 뒤의 값 중 이 키를 가진 설정만 본다. 하나 이상 있어야 하고 모두 자기 주소여야 한다.
-  if [ "$role" = codex ] && ! jq -e --arg k 'shell_environment_policy.set.HC_TERMINAL_ID=' '
-      .address as $a | (.foreground.argv // []) as $v
-      | [range(0; ($v|length)-1) | select($v[.] == "-c") | $v[.+1] | select(startswith($k))] as $s
-      | ($s|length) > 0 and all($s[]; . == ($k + "\"" + $a + "\""))' <<<"$data" >/dev/null; then
-    echo "경고: $target 의 HC_TERMINAL_ID 주입값이 자기 주소와 다름 ($reason). Codex 보고가 엉뚱한 곳으로 갈 수 있습니다." >&2
-    return 1
-  fi
   status=$(jq -r '.status.state // "-"' <<<"$data") || return 1
+  hint=
+  [ "$status" != - ] || hint=" 신뢰·권한 창일 수 있음."
+  cwd=$(jq -r '.foreground.cwd // empty' <<<"$data") || return 1
+  if [ -z "$cwd" ] && [ "$reason" != 재사용 ]; then
+    cwd=$(jq -r '.cwd // empty' <<<"$data") || return 1
+  fi
+  if [ -n "$cwd" ]; then cwd=$(cd -P "$cwd" 2>/dev/null && pwd -P) || cwd=; fi
+  if ! jq -e --arg root "$ROOT" --arg cwd "$cwd" --arg role "$role" '
+    .state=="live" and $cwd==$root and
+    (if $role=="agy" then .status.app=="antigravity"
+     else (.status.app // .agent // .foreground.name)==$role end)' <<<"$data" >/dev/null; then
+    echo "경고: $target 재사용·준비 조건 불일치 ($reason; $summary).$hint hc read $target 으로 확인하세요." >&2
+    return 1
+  fi
+  # 각 -c 주입값이 하나 이상 있고, 같은 키의 모든 값이 현재 통신 대상과 같아야 한다.
+  if [ "$role" = codex ]; then
+    for key in HC_TERMINAL_ID HC_TERMINAL_SOCKET; do
+      expected=$HC_TERMINAL_SOCKET
+      if [ "$key" = HC_TERMINAL_ID ]; then expected=$(jq -r '.address' <<<"$data") || return 1; fi
+      if ! jq -e --arg k "shell_environment_policy.set.$key=" --arg expected "$expected" '
+          (.foreground.argv // []) as $v
+          | [range(0; ($v|length)-1) | select($v[.] == "-c") | $v[.+1] | select(startswith($k))] as $s
+          | ($s|length) > 0 and all($s[]; . == ($k + "\"" + $expected + "\""))' <<<"$data" >/dev/null; then
+        echo "경고: $target 의 $key 주입값 불일치 ($reason). Codex 보고가 엉뚱한 곳으로 갈 수 있습니다." >&2
+        return 1
+      fi
+    done
+  fi
   case "$status" in
     idle|done) ;;
-    working) echo "$target 사용 중 ($reason)" >&2 ;;
-    *) echo "경고: $target 점검 필요 ($reason; $summary). hc read $target 으로 확인하세요." >&2; return 1 ;;
+    working)
+      if [ "$reason" = 재사용 ]; then
+        echo "$target 사용 중 ($reason)" >&2
+      else
+        echo "경고: $target 신규 기동 준비 미완료 ($reason; $summary). hc read $target 으로 확인하세요." >&2
+        return 1
+      fi
+      ;;
+    *) echo "경고: $target 점검 필요 ($reason; $summary).$hint hc read $target 으로 확인하세요." >&2; return 1 ;;
   esac
 }
 
 # 기존 자식에 문제가 있으면 어느 역할도 새로 띄우지 않는다.
 # mine 오류는 '없음'으로 보지 않고, 같은 역할 자식이 여럿이면 어느 것을 쓸지 모르므로 멈춘다.
-EXISTING_codex= EXISTING_pi=
-for ROLE in codex pi; do
+EXISTING_codex= EXISTING_agy=
+for ROLE in codex agy; do
   T=$(mine "$P-$ROLE") || { echo "경고: $ROLE 기존 터미널 조회 실패" >&2; exit 1; }
   if [ "$(printf '%s' "$T" | grep -c .)" -gt 1 ]; then
     echo "경고: $ROLE 하위 터미널이 여러 개입니다 ($(echo $T)). 하나만 남기고 다시 실행하세요." >&2
@@ -91,25 +133,35 @@ done
 
 STARTED=()
 STARTED_ROLES=()
+start_failed() {
+  echo "경고: $1 기동 실패. 이번 실행에서 이미 띄운 터미널: ${STARTED[*]:-없음}" >&2
+  exit 1
+}
 
-# Codex: 사용자 지시로 권한 우회 모드(승인 창 없음, 샌드박스 없음)로 띄운다.
-#  --no-daemon        : hc 매뉴얼 필수 사항(없으면 명령이 hc 밖에서 실행됨)
-#  --dangerously-bypass-approvals-and-sandbox : 승인·샌드박스 해제(사용자 승인 사항)
+# 기본은 샌드박스. 이 프로젝트에서 승인한 .hc/local.env 값이 bypass일 때만 우회한다.
+# --no-daemon은 hc 터미널 안에서 Codex를 유지하기 위해 필요하다.
 if [ -z "$EXISTING_codex" ]; then
-  N=$(pick_name "$P-codex")
+  N=$(pick_name "$P-codex") || start_failed codex
   hc run --bg --name "$N" --cwd "$ROOT" ${LABEL[@]+"${LABEL[@]}"} -- sh -c '
-    exec codex --no-daemon --dangerously-bypass-approvals-and-sandbox \
+    if [ "$1" = bypass ]; then
+      set -- --dangerously-bypass-approvals-and-sandbox
+    else
+      set -- -s workspace-write -a never \
+        -c "sandbox_workspace_write.network_access=true" \
+        -c "sandbox_workspace_write.writable_roots=[\"$HOME/.local/state/herdr-core\"]"
+    fi
+    exec codex --no-daemon "$@" \
       -c "shell_environment_policy.set.HC_TERMINAL_ID=\"$HC_TERMINAL_ID\"" \
-      -c "shell_environment_policy.set.HC_TERMINAL_SOCKET=\"$HC_TERMINAL_SOCKET\""' >/dev/null
+      -c "shell_environment_policy.set.HC_TERMINAL_SOCKET=\"$HC_TERMINAL_SOCKET\""' sh "$CODEX_MODE" >/dev/null || start_failed codex
   STARTED+=("$N")
   STARTED_ROLES+=(codex)
 fi
 
-if [ -z "$EXISTING_pi" ]; then
-  N=$(pick_name "$P-pi")
-  hc run --bg --name "$N" --cwd "$ROOT" ${LABEL[@]+"${LABEL[@]}"} -- pi >/dev/null
+if [ -z "$EXISTING_agy" ]; then
+  N=$(pick_name "$P-agy") || start_failed agy
+  hc run --bg --name "$N" --cwd "$ROOT" ${LABEL[@]+"${LABEL[@]}"} -- agy --settings "$ROOT/.hc/agy-settings.mac.json" >/dev/null || start_failed agy
   STARTED+=("$N")
-  STARTED_ROLES+=(pi)
+  STARTED_ROLES+=(agy)
 fi
 
 # 메시지에 의한 조기 반환은 역할별 총 60초 안에서 다시 기다린다.

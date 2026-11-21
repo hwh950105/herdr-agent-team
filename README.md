@@ -1,185 +1,104 @@
-# Herdr Agent Team: Multi-Agent Setup on Herdr
+# Herdr Agent Team: Claude · Codex · Antigravity multi-agent setup
 
 **English** | [한국어](README.ko.md)
 
-A drop-in project template for running three coding agents together inside the [Herdr](https://herdr.dev) app. **Claude Code is the orchestrator.** It starts **Codex** (implementation and verification) and **pi** (browser QA tester: checks real screens with ego lite) as child terminals and exchanges tasks and reports with them through the `hc` CLI. Nothing depends on the project name, so you can copy the files into any project.
+A shared project-folder template for running three coding agents inside [Herdr](https://herdr.dev). **Claude Code is the lead and core engineer**; it starts **Codex** (backend implementation) and **Antigravity** (`agy`, UI implementation and browser verification) in neighbouring terminals and exchanges work with them through a fixed message format. Nothing depends on the project name, so copy the files into any new project. Works on **macOS and Windows**.
 
 ```
-You ──▶ Claude (orchestrator)
-          ├─ hc send ─▶ Codex (<prefix>-codex)   implement · test · debug
-          └─ hc send ─▶ pi    (<prefix>-pi)      browser QA (ego lite)
-              ◀─ [hc-report] ─┘
+User ──▶ Claude (lead + schema, auth, shared types, integration)
+           ├─ [hc-task] ─▶ Codex       (<prefix>-codex)  backend APIs, logic, integrations, tests
+           └─ [hc-task] ─▶ Antigravity (<prefix>-agy)    screens, forms, API wiring + browser E2E
+               ◀─ [hc-report] ─┘
+pi: the user's personal agent (not part of development)
 ```
 
-> The agent rules (`AGENTS.md`, `CLAUDE.md`) are written in Korean and tell the agents to answer in Korean. See [Customize it](#customize-it) to change that.
+## Roles
 
-## Quick start: let an agent set it up
+| Agent | Writes | Owns |
+|---|---|---|
+| **Claude** | DB schema and migrations, auth and security, shared types / API contracts / error format, integration glue | Design, task split, integration review |
+| **Codex** | Spec'd feature APIs and service logic, external integrations, backend tests, large refactors | API behaviour and data integrity |
+| **Antigravity** | Screens, components, forms, state binding, API wiring, loading/error states, environment and build scripts | User flows verified in a real browser |
+| **pi** | Personal work | Excluded from the development split |
 
-Install the Herdr app, start Claude Code (`claude`) in this folder from a **terminal inside Herdr**, and paste the prompt below. You still install and sign in to Herdr and Claude Code yourself (see [section 1](#1-install-the-tools)).
+The full rules (ownership boundaries, task/report format, safety) live in [`AGENTS.md`](AGENTS.md) (written in Korean).
 
-```text
-Run the "Agent setup steps" in README.md from top to bottom to set up the multi-agent environment in this folder.
-Run each step's check first and skip the step if it already passes. Ask me before any step marked "ask the user".
-When you finish, give me a table of each step's result (done / skipped / needs your action).
-```
+## macOS vs Windows
 
-### Agent setup steps
+| | macOS | Windows |
+|---|---|---|
+| Herdr | **Herdr app** + herdr-core (`hc`) | **Herdr app** + herdr-core (`hc`) |
+| Messaging | `hc send` / `hc wait` / `hc read` | same |
+| Own address | `$HC_TERMINAL_ID` (e.g. `t2c`) | `$env:HC_TERMINAL_ID` |
+| Scripts | `.hc/up.sh`, `.hc/task.sh` (bash, needs `jq`) | `.hc\up.ps1`, `.hc\task.ps1`, `.hc\hc.ps1` (PowerShell) |
+| Layout | bercail (optional) | default |
+| Browser QA | ego lite (`ego-browser`) | Playwright |
 
-> This section is for the agent doing the setup (Claude Code). Run each step as **check → act if the check fails → check again**. If the check passes, skip the action. If a step fails, don't go on: report the cause and the output to the user.
->
-> Never do these on the user's behalf: interactive sign-ins (first run of `claude`/`codex`/`pi`), key presses in trust or permission dialogs, `sudo` commands, approving bypass mode. Stop at those steps and tell the user exactly what to do. For commands the user must run, tell them to type `! <command>` at the prompt.
-
-| # | Step | Check (passes when) | Action (if the check fails) |
-|---|---|---|---|
-| 1 | Running inside Herdr | `echo "$HC_TERMINAL_ID"` (not empty) | **Stop.** Ask the user to restart `claude` from a terminal inside the Herdr app |
-| 2 | herdr-core (`hc`) | `hc --version` (prints a version) | **Ask the user**, then `curl -fsSL https://releases.herdr.dev/core/install.sh \| sh`. Never run bare `hc` |
-| 3 | jq | `command -v jq` | `brew install jq` |
-| 4 | Codex CLI | `command -v codex` | `npm i -g @openai/codex@latest` |
-| 5 | pi | `command -v pi` | `npm i -g @earendil-works/pi-coding-agent` |
-| 5-1 | ego lite (pi's browser) | `command -v ego-browser && ego-browser --version` | **User action.** Have the user install the ego lite app and finish its first-run onboarding, which adds `~/.local/bin/ego-browser`. If the command isn't found, run `export PATH="$HOME/.local/bin:$PATH"` and check again |
-| 6 | npm permission error | Did step 4 or 5 fail with `EACCES` or "root-owned files"? | **Ask the user** to run `! sudo chown -R "$(id -u):$(id -g)" ~/.npm` themselves, then redo steps 4–5 |
-| 7 | Codex and pi sign-in | Ask the user whether they've signed in (the agent can't check) | **User action.** Tell them to run `codex` and `pi` once each in a separate terminal and sign in |
-| 8 | Codex permission mode | `grep -n 'dangerously-bypass' .hc/up.sh` and the approval record in section 4 of `AGENTS.md` | **Ask the user** whether to keep bypass mode or switch to the sandbox. For the sandbox, replace the launch line in `.hc/up.sh` with the one in [the section below](#️-codex-runs-in-bypass-mode) and rewrite the approval record in `AGENTS.md` section 4 to match |
-| 9 | Start child terminals | `.hc/up.sh; echo "exit=$?"` (`exit=0`, Codex and pi are `idle`) | Follow "Fixing `up.sh`" below |
-| 10 | Messaging works | Send pi a short `[hc-task]` (for example `echo ok`) and check that an `[hc-report]` comes back (format in `AGENTS.md` section 2-2) | If no report arrives, look at `hc read <target> --lines 100 --json` and report to the user |
-| 10-1 | pi's browser works | Send pi an `[hc-task]` to read `ego-browser skill` and report the title of `https://example.com` from `taskSpace("qa-smoke")` (`대상 URL: https://example.com`) | If it fails, report pi's screen to the user. Also ask whether pi's model accepts images (if not, visual checks are reported as unverified) |
-| 11 | (Optional) bercail theme | `test -f ~/.config/herdr-app/layouts/bercail.json` | **Ask the user.** If they want it, walk them through [section 2](#2-install-the-theme-layout-bercail) (they copy the install line from herdr.dev) |
-
-#### Fixing `up.sh`
-
-If `up.sh` warns and exits with code 1, look at the terminal it names with `hc read <name> --lines 60`, then:
-
-| Screen | What to do |
-|---|---|
-| A folder trust dialog such as `Trust this folder?` (common on Codex's first run) | Don't press keys for the user. Ask them to choose in that terminal, then run `.hc/up.sh` again |
-| A sign-in screen | Go back to step 7 and ask the user to sign in |
-| A harmless notice, such as an update prompt | Press `esc` to dismiss it, then run `.hc/up.sh` again |
-| `경고: 필요한 명령 없음: <command>` (missing command) | Go back to the matching step, 2–5 |
-| `하위 터미널이 여러 개입니다` (several child terminals) | Check that you created them, ask the user, then keep one (`hc kill <name>`) |
-| Any other error, or `error` state | Report the screen contents to the user as they are |
+Both use the same Herdr app and `hc` commands; the message format (`[hc-task]` / `[hc-report]`), roles and rules are identical. Only the script language, layout and browser tool differ.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `AGENTS.md` | Shared rules for all three agents: roles, the `hc` protocol (task and report formats), file ownership, safety rules |
-| `CLAUDE.md` | Claude Code notes. Imports `@AGENTS.md` |
-| `.hc/up.sh` | Starts the Codex and pi child terminals, or checks the ones already running |
-| `.hc/reports/` | Agent reports (ignored by git) |
-| `.hc/qa/` | Screenshots and evidence from pi's browser checks (ignored by git) |
+| `AGENTS.md` | Shared rules for all three agents, with command appendices (A: `hc`, both OSes; B: Windows differences) and a per-project settings table |
+| `CLAUDE.md` | Claude Code notes; imports `@AGENTS.md` |
+| `.hc/up.sh` | macOS: start or check the Codex and Antigravity child terminals |
+| `.hc/up.ps1` | Windows: same job as `up.sh`, in PowerShell |
+| `.hc/hc.ps1` | Windows: shared helpers for `up.ps1` and `task.ps1` (not run directly) |
+| `.hc/agy-settings.*.json` | Per-session allow list passed to `agy --settings`, so report and browser commands run without approval prompts |
+| `.hc/task.sh`, `.hc/task.ps1` | Send a task, wait for it, and verify the report file; re-prompt the agent if it stopped without reporting |
+| `.hc/tasks/` | Sent task texts and wait state (git-ignored) |
+| `.hc/local.env` | Local-only settings (git-ignored). `CODEX_MODE=bypass` runs Codex without its sandbox |
+| `.hc/reports/`, `.hc/qa/` | Agent reports and browser evidence (git-ignored) |
 
-## 1. Install the tools
+## Quick start
 
-These steps are for macOS on Apple silicon.
+Install the Herdr app, open **a terminal inside the Herdr app** in this folder, start `claude`, and paste:
 
-### Herdr app and herdr-core (`hc`)
-
-```bash
-# Herdr app (installs herdr-core too if it is missing)
-curl -fsSL https://releases.herdr.dev/app/install.sh | sh
-# or download https://releases.herdr.dev/app/Herdr.dmg and move it to Applications
-
-# herdr-core only, or to update it
-curl -fsSL https://releases.herdr.dev/core/install.sh | sh
-hc update
+```text
+Follow "Agent setup procedure" in README.ko.md for the current OS, step by step, to set up this folder's multi-agent environment.
+Run each check first and skip steps that already pass. Ask me before any step marked "사용자 확인" (user confirmation).
+When done, summarise each step as done / skipped / needs user action in a table.
 ```
 
-Check the install:
+Installing Herdr and logging in to Claude Code, Codex and `agy` must be done by a person.
 
+### Install summary
+
+**macOS**
 ```bash
-hc --version          # e.g. hc 0.1.20
-hc --help             # command list (don't run bare `hc`: it opens a terminal picker)
+curl -fsSL https://releases.herdr.dev/app/install.sh | sh   # Herdr.app (+ herdr-core)
+brew install jq
+npm i -g @openai/codex@latest
+# Antigravity app → register the agy CLI; ego lite app → ego-browser CLI
+```
+Do not use the old standalone `herdr` CLI/TUI on either OS; it talks to a different server than the Herdr app.
+
+**Windows (PowerShell)**
+```powershell
+powershell -c "irm https://releases.herdr.dev/app/install.ps1 | iex"   # Herdr app (+ herdr-core)
+winget install OpenJS.NodeJS.LTS
+npm i -g @openai/codex@latest
+# Antigravity app → register the agy CLI
+npm i -D playwright; npx playwright install chromium            # in the project
 ```
 
-> Don't use the old `herdr agent ...` / `herdr pane ...` commands. They talk to a different server that the app doesn't show. Always use `hc`.
-
-### Agent CLIs and tools
+Then start the agents (Claude does this itself when needed):
 
 ```bash
-brew install jq                                   # used by up.sh
-npm i -g @anthropic-ai/claude-code                # Claude Code
-npm i -g @openai/codex@latest                     # Codex CLI
-npm i -g @earendil-works/pi-coding-agent          # pi
+.hc/up.sh                                                            # macOS
+powershell -NoProfile -ExecutionPolicy Bypass -File .hc\up.ps1       # Windows
 ```
 
-Sign in to each CLI once by running `claude`, `codex` and `pi`.
+## Layout (macOS: bercail, Windows: default)
 
-### ego lite (pi's browser)
+On Herdr.app you can use the community layout **bercail** (by simoncrypta): copy its install prompt from <https://herdr.dev/layouts>, paste it to an agent inside Herdr, then pick it with `ctrl-shift-l`. On Windows the Herdr app keeps its default layout. The layout does not affect collaboration.
 
-pi drives a browser through the `ego-browser` CLI of the **ego lite app** (a Chromium browser built for agents). Install the app and finish its first-run onboarding; that registers `~/.local/bin/ego-browser`.
+## ⚠️ Codex permission mode
 
-```bash
-command -v ego-browser   # ~/.local/bin/ego-browser
-ego-browser --version    # e.g. ego-browser 0.6.3.17
-ego-browser skill        # agent usage guide (pi reads it before each task)
-```
+The launchers start Codex **sandboxed by default** (`-s workspace-write -a never`, network on, herdr-core socket folder writable). Bypass mode (`--dangerously-bypass-approvals-and-sandbox`) is used only when the git-ignored `.hc/local.env` contains `CODEX_MODE=bypass`. In bypass mode the rules in `AGENTS.md` are promises, not enforced limits. Decide per project.
 
-> ego lite uses the real accounts you're signed in to. That's why `AGENTS.md` limits pi to the `대상 URL:` (target URL) in each task and forbids writes on live services (payments, deletes, posts and so on).
+## What has been verified
 
-> If npm fails with `EACCES` or "cache folder contains root-owned files", fix the cache owner with `sudo chown -R "$(id -u):$(id -g)" ~/.npm`.
-
-## 2. Install the theme (layout): bercail
-
-The screen uses **bercail**, a Herdr community layout by simoncrypta. It has spaces and an agent list in the left sidebar and a desk of agent terminals in the middle. This repo doesn't include bercail's files. You install the author's shared copy from inside Herdr.
-
-1. Open the Herdr app.
-2. In a browser, open <https://herdr.dev/layouts> and find **bercail**.
-3. Use the entry's copy button and paste the line to an agent running inside Herdr (for example Claude Code). The agent adds `~/.config/herdr-app/layouts/bercail.json` and the mods it needs (`mods/bercail-agents/`, `mods/bercail-desk/`). Your current layout stays as it is.
-4. Press `ctrl-shift-l` and pick bercail.
-5. For dark mode, set `"appearance": "dark"` in `~/.config/herdr-app/settings.json`.
-
-To undo, press `ctrl-shift-l` and pick your old layout. If the window breaks, press `ctrl-alt-shift-escape` to reset to the default layout and keys. To edit layouts and mods yourself, see `~/.config/herdr-app/AGENTS.md`, which Herdr writes.
-
-## 3. Usage
-
-1. Clone or copy this repo, then start Claude Code from a **terminal inside the Herdr app**:
-
-   ```bash
-   echo $HC_TERMINAL_ID   # should print an address like t2c; empty means you're outside Herdr
-   claude
-   ```
-
-2. When Claude needs help, it runs `.hc/up.sh` to start the child terminals.
-   - Names are `<prefix>-codex` and `<prefix>-pi`, where the prefix is the normalized folder name (`.hc/up.sh --prefix` prints it).
-   - If they are already running, it starts nothing and checks their folder, role and status. If something is wrong, it warns and exits with code 1.
-   - Only Claude runs `up.sh`. If Codex or pi runs it, a duplicate set of child terminals appears.
-3. Say things like "have Codex do it" or "ask pi to check it in the browser". Claude sends an `[hc-task]` in the format from `AGENTS.md`, gets an `[hc-report]` back, checks the result and summarizes it for you.
-
-Check status:
-
-```bash
-hc ls | jq -r --arg me "$HC_TERMINAL_ID" \
-  '.terminals[] | select(.parent==$me) | "\(.address) \(.name) \(.agent) \(.status // "-")"'
-```
-
-## ⚠️ Codex runs in bypass mode
-
-`.hc/up.sh` starts Codex with `--dangerously-bypass-approvals-and-sandbox`: no approval prompts and no sandbox. The original author chose this for their own machine. **Decide whether it fits yours before you use it.**
-
-- In this mode Codex can edit any file and run any command. Rules in `AGENTS.md`, such as owned files and no deleting, are promises the agents keep. **No tool enforces them.**
-- To use a sandbox instead, replace the Codex line in `.hc/up.sh` with:
-
-  ```sh
-  exec codex --no-daemon -s workspace-write -a never \
-    -c "sandbox_workspace_write.network_access=true" \
-    -c "sandbox_workspace_write.writable_roots=[\"$HOME/.local/state/herdr-core\"]" \
-    -c "shell_environment_policy.set.HC_TERMINAL_ID=\"$HC_TERMINAL_ID\"" \
-    -c "shell_environment_policy.set.HC_TERMINAL_SOCKET=\"$HC_TERMINAL_SOCKET\""
-  ```
-
-  In sandbox mode `.agents/`, `.codex/` and `.git/` are read-only, so keep shared files in `.hc/`. The Codex address check in `up.sh` keeps working.
-
-## Customize it
-
-This repo is a **starting point** shaped around one person's workflow. Adapt it to your own setup instead of using it as is.
-
-- **Roles:** change each agent's role, specialty and pi's forbidden list in the table in section 1 of `AGENTS.md`. You can drop an agent (for example, run without pi) or add one.
-- **Agents and launch flags:** edit the `codex`/`pi` launch lines, the `command -v` list and the role names in `.hc/up.sh`. To add another CLI agent, add a launch line and match the role check in `check_terminal` (`status.app`).
-- **Permission level:** run Codex in a sandbox (see above), or keep bypass mode only inside an isolated environment. **Rewrite the approval record in section 4 of `AGENTS.md` with your own decision.**
-- **Language:** `AGENTS.md` and `CLAUDE.md` say "answer everything in Korean". Change that line for another language, or translate the files.
-- **Report format and folder:** you can change the `[hc-task]`/`[hc-report]` fields and the report path (`.hc/reports/`) to match your team. Edit only `AGENTS.md`, which holds the shared rules.
-- **Theme:** the default Herdr layout or any other layout from herdr.dev works just as well. The theme doesn't affect collaboration.
-
-## What was tested
-
-`.hc/up.sh` was tested against a fake `hc`: reuse, folder/role/status mismatch, duplicate terminals, wrong Codex address, malformed `hc ls` output, fresh start, and waits that return early on a message or time out. Startup races, cleanup of child terminals when the parent exits, and end-to-end message delivery were not tested in a real environment.
+- `.hc/up.sh` (macOS) was tested against a fake `hc` and in real Herdr.app runs (agent start-up, `hc` reports, ego lite browser checks).
+- `.hc/up.ps1` and `.hc/task.ps1` (Windows) port the macOS scripts to PowerShell using the same `hc` JSON. **They have not yet been run on a real Windows machine**; check the form of `HC_TERMINAL_SOCKET` and `hc send` from inside the Codex sandbox on first run.

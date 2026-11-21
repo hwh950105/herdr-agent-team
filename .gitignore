@@ -1,3 +1,5 @@
 .hc/reports/
 .omx/
 .hc/qa/
+.hc/local.env
+.hc/tasks/
