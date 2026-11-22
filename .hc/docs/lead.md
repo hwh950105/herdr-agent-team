@@ -59,7 +59,7 @@ hc ls --json | ConvertFrom-Json | ForEach-Object terminals | Where-Object parent
 |---|---|
 | `send`/`nudge` 0 | 보냄. 상대가 `working`이 됐거나 차례가 넘어간 것을 확인했다. Windows는 `blocked` 등으로 바뀐 경우도 0이며 `wait`가 4로 알린다(macOS는 이 경우 5) |
 | `send`/`nudge` 5 | 제출 확인 필요. macOS에서는 자동 Enter 없이 `hc read <대상> --lines 40`으로 상태와 입력란을 확인한다. Windows에서는 기존 Enter 재시도 후 이 코드를 반환한다 |
-| `wait` 0 | 보고 있음. 보고 파일과 실제 변경 파일을 확인한다. 대상이 agy면 `task.sh`·`task.ps1`이 agy 로그로 센 명령·승인 창·샌드박스 밖 실행 횟수(추정)를 함께 보여 준다(2·4·0 경로에서도 출력) |
+| `wait` 0 | 보고 있음. 보고 파일과 실제 변경 파일을 확인한다. 대상이 agy면 `task.sh`·`task.ps1`이 agy 로그로 센 명령·사람 승인 창·승인 창 없이 샌드박스 밖 실행 횟수(추정)를 함께 보여 준다(2·4·0 경로에서도 출력) |
 | `wait` 2 | 보고 누락. `nudge`로 다시 보낸다(같은 ID, 최대 2번). 그래도 없으면 화면을 읽고 사용자에게 알린다 |
 | `wait` 3 | 시간 초과. 아직 작업 중이며 완료가 아니다. 다시 `wait` |
 | `wait` 4 | 점검 필요. 승인·신뢰 창이거나 종료됐다(보고 파일이 있어도 대상이 `blocked`면 4). macOS는 제출 미확인 기록(`PENDING=1`)이나 보고 첫 줄의 형식·ID 불일치도 4다. 화면을 읽고 사용자에게 알린다 |
@@ -139,7 +139,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .hc\task.ps1 nudge <작업ID
 
 - 기본은 샌드박스(`-s workspace-write -a never`, 네트워크 허용, `--no-daemon`). 샌드박스에서는 `.agents/`, `.codex/`, `.git/`이 읽기 전용이다.
   - macOS: `~/.local/state/herdr-core` 쓰기 허용, `HC_TERMINAL_ID`/`HC_TERMINAL_SOCKET`을 `-c shell_environment_policy.set...`으로 주입한다.
-  - Windows: `HC_TERMINAL_SOCKET`이 파일 경로이면 그 폴더를 `--add-dir`로 쓰기 허용에 넣는다. 실제 Windows에서는 named pipe(`\\.\pipe\herdr-core-...`)여서 붙지 않았다. npm 설치 `codex.cmd`는 `up.ps1`이 실제 경로를 찾아 넘긴다. 샌드박스(`workspace-write`) Codex에서도 named pipe로 `hc send`가 동작함을 확인했다(2026-11-21). 막히더라도 보고 파일로 완료를 확인할 수 있다.
+  - Windows: `HC_TERMINAL_SOCKET`이 파일 경로이면 그 폴더를 `--add-dir`로 쓰기 허용에 넣는다. 실제 Windows에서는 named pipe(`\\.\pipe\herdr-core-...`)여서 붙지 않았다. npm 설치 `codex.cmd`는 `up.ps1`이 실제 경로를 찾아 넘긴다. 실제 정책이 `workspace-write`인 Codex에서는 named pipe 접근이 거부돼(오류 5) 보고 `hc send`가 실패한다(2026-11-22 확인. 2026-11-21의 "동작함" 기록은 전역 설정 때문에 실제로는 Full Access였던 것으로 보인다). 보고 메시지는 오지 않지만 `wait`가 보고 파일로 완료를 판정한다.
+  - Windows 샌드박스 Codex에서는 `node --test`가 테스트 파일마다 하위 프로세스를 띄우다 `spawn EPERM`으로 실패한다. Codex에게 보내는 검증 명령은 `node --test --test-isolation=none <파일>`로 적는다(Node 22.8+).
   - Windows Codex의 PowerShell은 실행 정책 때문에 `npm`(`npm.ps1`)이 막힐 수 있다. 지시문의 명령은 `npm.cmd test`처럼 `.cmd`로 적는다.
 - 우회 모드(`--dangerously-bypass-approvals-and-sandbox`)는 `.hc/local.env`에 `CODEX_MODE=bypass` 한 줄이 있을 때만 쓴다. 사용자 승인 뒤에만 만들고, 승인 기록은 `AGENTS.md` 5절에 적는다. `.hc/local.env`는 git에 올라가지 않으므로 복사한 프로젝트는 샌드박스로 시작한다.
 - 샌드박스 Codex가 첫 실행 권한 선택 창에서 Full Access로 바뀌면 사실상 우회 모드다. 인자는 `-s workspace-write`로 남아 있어도 실제 세션 정책은 `danger-full-access`가 된다. `up.sh`·`up.ps1`은 Codex 화면 기록(최근 3000줄)에서 마지막 `• Permission selection requested:` 값이 정확히 `Full Access`이면 경고하고 멈추고, 화면을 읽지 못해도 멈춘다. 그 줄이 3000줄 밖으로 밀려난 오래된 세션은 찾지 못한다. Windows는 권한 창의 선택이 전역 `%USERPROFILE%\.codex\config.toml`의 `sandbox_mode`에 저장된 사례가 있으니, 이 경고가 나오면 그 값도 사용자가 확인한다. 그렇게 쓸 거면 처음부터 `CODEX_MODE=bypass`로 띄운다. 실제 정책은 `~/.codex/sessions/.../rollout-*.jsonl`의 마지막 `turn_context`에 있는 `sandbox_policy`로 확인한다.
@@ -149,7 +150,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .hc\task.ps1 nudge <작업ID
 
 - 권한 우회 옵션 없이 띄우고, 기동 스크립트가 `agy --settings .hc/agy-settings.<mac|win>.json`으로 이 세션에만 허용 목록을 넘긴다. 목록을 바꾸면 agy를 다시 띄워야 적용된다.
   - macOS 기본: `command(hc send)`만 허용한다.
-  - Windows 기본: `command(regex:hc send .*)`만 허용한다. PowerShell에서 따옴표·한글이 섞인 보고 명령을 위해 기존 정규식 형식을 유지한다.
+  - Windows 기본: `command(regex:hc send .*)`만 허용한다. PowerShell에서 따옴표·한글이 섞인 보고 명령을 위해 기존 정규식 형식을 유지한다. 다만 agy 1.5.14는 PowerShell 명령 앞에 출력 인코딩 설정 코드를 붙여 실행하므로 이 규칙이 맞지 않아, 보고 때마다 샌드박스 안 실행이 막힌 뒤 검토 에이전트 승인으로 샌드박스 밖에서 다시 실행된다(2026-11-22 확인). `command(regex:.*hc send .*)`처럼 앞을 열면 `다른명령; hc send ...`까지 허용되므로 쓰지 않는다.
   - 두 OS 공통 `ask`: `rm`, `git push|reset|clean`, `npm publish`, `sudo`, `hc kill`, `hc server`(Windows는 `Remove-Item`·`del`·`rmdir` 추가). Auto 모드에서도 이 명령은 사람 승인 창을 띄운다(macOS, agy 1.5.14에서 `&&`로 이은 명령까지 확인. Windows 미검증). 배포 명령은 프로젝트마다 `AGENTS.md` 5절 스택에 맞춰 추가한다. 사용자 설정 파일을 쓰면 이 `ask` 목록이 적용되지 않으므로 그 파일에도 같은 항목을 넣는다.
 - **본인 환경에서 넓히기:** 기동 스크립트는 사용자 설정 폴더의 `hc-agents/agy-settings.<mac|win>.json`(macOS `~/.config/hc-agents/`, Windows `%APPDATA%\hc-agents\`)이 있으면 공개 기본값 대신 그 파일을 쓰고, 쓴다는 사실을 화면에 알린다. 프로젝트 밖에 두는 이유는 샌드박스 에이전트가 프로젝트 안 파일을 고쳐 권한을 넓힐 수 있기 때문이다. `command(*)`나 `regex:.*` 같은 전체 허용이 있으면 쓰지 않는다. 예: macOS `command(hc send)`, `command(ego-browser)`, `read_file(/Applications/ego lite.app)` / Windows `command(regex:hc send .*)`, `command(regex:node .*)`. 바꾸면 agy를 다시 띄운다. 에이전트에게 이 파일을 만들거나 고치게 하지 않는다.
 - 브라우저/Node 명령은 기본 자동 허용하지 않는다. 승인 창이 나오면 사용자에게 알리고 직접 선택하게 한다. 반복 검증을 위해 사용자가 명시적으로 승인한 경우에만 프로젝트의 위 설정 파일에 필요한 항목을 추가할 수 있다. Windows의 `command(regex:node .*)`는 임의 Node 코드 실행을 허용하므로 신뢰할 수 있는 프로젝트·검사한 스크립트에만 선택한다. macOS의 `command(ego-browser)`는 로그인된 실제 브라우저에 접근하며, 앱 읽기 경로도 자기 설치 위치를 확인해 필요한 범위만 추가한다. `command(*)`·권한 우회 옵션·전역 설정 자동 변경은 금지한다.

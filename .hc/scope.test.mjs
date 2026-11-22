@@ -488,3 +488,23 @@ test('남은 임시 파일은 현황과 새 예약에서 무시한다', () => {
     assert.equal(t.run('status').code, 0);
   } finally { t.cleanup(); }
 });
+
+test('스냅샷 제외 범위는 check와 verify에서 수동 확인을 안내한다', () => {
+  const t = project();
+  try {
+    assert.equal(t.start('qa', '.hc/qa/t1/').code, 0);
+    t.write('.hc/qa/t1/result.txt');
+    t.report('qa', 'done');
+    for (const command of ['check', 'verify']) {
+      const result = t.run(command, 'qa');
+      assert.equal(result.code, 0);
+      assert.match(result.out, /\.hc\/qa\/t1\/.*스냅샷 제외.*직접 확인/);
+    }
+
+    assert.equal(t.start('normal', 'src/').code, 0);
+    t.write('src/a.js');
+    const normal = t.run('check', 'normal');
+    assert.equal(normal.code, 0);
+    assert.doesNotMatch(normal.out, /스냅샷 제외/);
+  } finally { t.cleanup(); }
+});

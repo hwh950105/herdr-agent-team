@@ -30,6 +30,7 @@ class Refuse extends Error { constructor(m, code = 6) { super(m); this.code = co
 
 // ---------- 경로 ----------
 const norm = (p) => p.normalize('NFC').toLowerCase();   // 대소문자만 다른 범위는 보수적으로 같은 것으로 본다
+const hasSkippedPrefix = (p) => SKIP_PREFIX.some((prefix) => (norm(p) + '/').startsWith(prefix));
 const under = (file, dir) => { const d = dir.replace(/\/$/, ''); return file === d || file.startsWith(d + '/'); };
 
 /** '담당 파일:' 줄을 경로 목록으로 바꾼다. 해석이 안 되면 status='unparsed'(검사 미적용). */
@@ -114,7 +115,7 @@ export function scan(root = ROOT) {
       if (SKIP_NAME.has(d.name)) continue;
       const r = rel ? `${rel}/${d.name}` : d.name;
       const key = r;   // 실제 경로를 보존하고 소유 비교용 정규화와 분리한다.
-      if (SKIP_PREFIX.some((s) => (norm(key) + '/').startsWith(s))) continue;
+      if (hasSkippedPrefix(key)) continue;
       const canonical = norm(key);
       if (seen.has(canonical)) throw new Refuse(`정규화하면 같은 경로가 되는 파일을 검사할 수 없습니다: ${seen.get(canonical)} ↔ ${key}`, 8);
       seen.set(canonical, key);
@@ -247,7 +248,14 @@ export function classify(id) {
 function cmdCheck(id, { quiet, classified } = {}) {
   const { rec, rows } = classified || classify(id);
   const lines = [`검사: ${id} (${rec.target}) 범위=${rec.scope.status === 'applied' ? rec.scope.entries.map((e) => e.p + (e.dir ? '/' : '')).join(', ') || '(없음)' : '미적용'}`];
-  if (!rows.length) lines.push('  기준선 이후 바뀐 파일 없음');
+  const excluded = rec.scope.entries.filter((entry) => hasSkippedPrefix(entry.p));
+  if (!rows.length && (!excluded.length || excluded.length < rec.scope.entries.length)) {
+    lines.push('  기준선 이후 바뀐 파일 없음');
+  }
+  if (excluded.length) {
+    const paths = excluded.map((entry) => entry.p + (entry.dir ? '/' : '')).join(', ');
+    lines.push(`참고: 담당 범위 중 ${paths} 는 스냅샷 제외 경로라 검사하지 않았습니다. 보고의 파일 경로를 직접 확인하세요.`);
+  }
   for (const r of rows) {
     const tag = r.where === 'own' ? '범위 안' : r.where === 'unowned' ? '범위 밖 ✗' : `다른 작업 범위(${r.where.slice(6)})`;
     lines.push(`  ${r.kind} ${r.file}  — ${tag}`);

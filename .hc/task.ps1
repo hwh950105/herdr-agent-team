@@ -92,7 +92,7 @@ function Test-Report([string]$Rp) { (Test-Path -LiteralPath $Rp) -and (Get-Item 
 
 # agy 작업이면 agy 로그에서 그 작업 구간의 명령 실행·승인 창·샌드박스 밖 실행 횟수를 세어 보여 준다(종료 코드와 무관). task.sh와 같은 규칙.
 # Auto 모드는 샌드박스 밖 실행을 사람이 아니라 검토 에이전트가 승인할 수 있어서, 보고만으로는 우회 여부를 알 수 없다.
-# 샌드박스 밖 실행 = 명령 판정 수 - 샌드박스 실행 수 - 사람 승인 창 수 (로그 기반 추정, agy 1.5.14 기준).
+# 승인 창 없이 샌드박스 밖 실행 = 명령 판정 수 - 샌드박스 실행 수 - 사람 승인 창 수 (로그 기반 추정, agy 1.5.14 기준).
 # 구간: 이 작업의 [hc-task] 머리줄(nudge 포함)이 들어온 입력부터, 다른 [hc-task] 머리줄 입력 전까지.
 function Show-AgyLogSummary([string]$Id, [string]$Target) {
   try {
@@ -120,8 +120,8 @@ function Show-AgyLogSummary([string]$Id, [string]$Target) {
       }
     } finally { $Rd.Dispose() }
     $Out = [Math]::Max(0, $Cmd - $Sb - $Ask)
-    Write-Output "agy 로그(추정): 명령 ${Cmd}회, 샌드박스 안 ${Sb}회, 사람 승인 창 ${Ask}회, 샌드박스 밖 실행 ${Out}회 — $($Log.FullName)"
-    if ($Out -gt 0) { Write-Output '  ↳ 샌드박스 밖 실행은 Auto 검토 에이전트가 승인한 것일 수 있습니다. 필요하면 로그의 BypassSandbox 줄을 확인하세요.' }
+    Write-Output "agy 로그(추정): 명령 ${Cmd}회, 샌드박스 안 ${Sb}회, 사람 승인 창 ${Ask}회, 승인 창 없이 샌드박스 밖 실행 ${Out}회 — $($Log.FullName)"
+    if ($Out -gt 0) { Write-Output '  ↳ 승인 창 없이 샌드박스 밖에서 실행된 명령은 Auto 검토 에이전트가 승인한 것입니다(사람이 승인한 실행은 승인 창 수에 따로 셉니다). 필요하면 로그의 BypassSandbox 줄을 확인하세요.' }
   } catch {
     Write-Output "agy 로그 요약 실패: $($_.Exception.Message)"
   }
