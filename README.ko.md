@@ -196,7 +196,7 @@ API 키·인증 파일·`.env`·브라우저 프로필·민감 로그는 Git에 
 
 - `.hc/up.sh`(macOS)는 가짜 `hc`로 재사용·불일치·중복·주입값·대기 시간 초과 등을 모의 검사했고, 실제 Herdr.app에서 Codex·Antigravity 기동, `hc` 보고, ego lite 브라우저 검증을 확인했습니다.
 - `.hc/up.ps1`·`.hc/task.ps1`(Windows)은 Windows 11 + PowerShell 5.1 + Herdr 앱에서 기동, Codex 백엔드 작업, Antigravity 화면 구현과 Playwright 검증, 보고 파일과 `hc send` 보고를 확인했습니다. 진행 기록과 문제점·해결은 [`docs/windows-setup-issues.md`](docs/windows-setup-issues.md)에 있습니다. Windows의 `HC_TERMINAL_SOCKET`은 named pipe입니다.
-- 샌드박스 Codex의 named pipe 보고와 blocked 대기 구분은 Todo 테스트 프로젝트에서 확인했습니다([기록](docs/windows-setup-issues.md)). 새 자동화의 실제/모의/미실행 구분은 [자동화 검증 기록](docs/automation-validation.md)에 따로 남깁니다. 이번 Windows 검증이 macOS 실제 실행을 대신하지 않습니다.
+- blocked 대기 구분은 Todo 테스트 프로젝트에서 확인했습니다([기록](docs/windows-setup-issues.md)). 실제 정책이 `workspace-write`인 Windows Codex는 named pipe 접근이 거부돼 보고 `hc send`가 실패하며, `wait`가 보고 파일로 완료를 판정합니다(2026-11-22). Windows agy의 `ask` 규칙은 평문 형식이 맞지 않아, 앞부분 고정 정규식으로 바꿔 시험 터미널에서 승인 창을 확인했습니다(`.hc/docs/lead.md` 5절). 새 자동화의 실제/모의/미실행 구분은 [자동화 검증 기록](docs/automation-validation.md)에 따로 남깁니다. 이번 Windows 검증이 macOS 실제 실행을 대신하지 않습니다.
 - 기록된 Windows 환경에서 핵심 테스트 27개·백엔드 43개·브라우저 두 뷰포트가 통과했습니다. 특정 환경의 결과이며 버전 간 호환성을 보장하지 않습니다. macOS에서도 실제 Codex로 범위 예약·`check`(범위 밖 변경 7)·`verify`·겹침 거부(6)·수정 재지시 3회 한도를 확인했습니다(2026-11-22, [기록](docs/automation-validation.md)). 이미지 생성 병렬 시나리오는 미실행입니다.
 - 과거 브라우저 실행은 확장 허용 목록에서 확인했습니다. 현재 축소한 기본값으로 브라우저 무인 실행을 검증한 것은 아니며 승인이 필요할 수 있습니다.
 

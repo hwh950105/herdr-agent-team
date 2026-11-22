@@ -92,7 +92,7 @@ function Test-Report([string]$Rp) { (Test-Path -LiteralPath $Rp) -and (Get-Item 
 
 # agy 작업이면 agy 로그에서 그 작업 구간의 명령 실행·승인 창·샌드박스 밖 실행 횟수를 세어 보여 준다(종료 코드와 무관). task.sh와 같은 규칙.
 # Auto 모드는 샌드박스 밖 실행을 사람이 아니라 검토 에이전트가 승인할 수 있어서, 보고만으로는 우회 여부를 알 수 없다.
-# 승인 창 없이 샌드박스 밖 실행 = 명령 판정 수 - 샌드박스 실행 수 - 사람 승인 창 수 (로그 기반 추정, agy 1.5.14 기준).
+# 명령 판정마다 하나로 분류한다: 사람 승인 창 > 샌드박스 안 실행 > 둘 다 없음(승인 창 없이 샌드박스 밖). 로그 기반 추정, agy 1.5.14 기준.
 # 구간: 이 작업의 [hc-task] 머리줄(nudge 포함)이 들어온 입력부터, 다른 [hc-task] 머리줄 입력 전까지.
 function Show-AgyLogSummary([string]$Id, [string]$Target) {
   try {
@@ -106,7 +106,7 @@ function Show-AgyLogSummary([string]$Id, [string]$Target) {
       if (Select-String -LiteralPath $F.FullName -SimpleMatch -Pattern $Key -Quiet) { $Log = $F; break }
     }
     if ($null -eq $Log) { Write-Output "agy 로그: $Id 기록을 찾지 못했습니다 ($Dir)"; return }
-    $Inside = $false; $Cmd = 0; $Sb = 0; $Ask = 0
+    $Inside = $false; $Cmd = 0; $Sb = 0; $Ask = 0; $Out = 0; $Open = $false; $A = $false; $S = $false
     # agy가 쓰는 중인 로그도 읽도록 쓰기 공유를 허용해 연다.
     $Fs = New-Object IO.FileStream($Log.FullName, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
     $Rd = New-Object IO.StreamReader($Fs, [Text.Encoding]::UTF8)
@@ -114,14 +114,17 @@ function Show-AgyLogSummary([string]$Id, [string]$Target) {
       while ($null -ne ($L = $Rd.ReadLine())) {
         if ($L.Contains('HandleUserInput') -and $L.Contains('[hc-task] id=')) { $Inside = $L.Contains($Key) }
         if (-not $Inside) { continue }
-        if ($L.Contains('Monitor agy_tool_safety FINISHED') -and $L -notmatch 'reason="(allowed_tool|unsupported_tool)') { $Cmd++ }
-        if ($L.Contains('escapable binaries=')) { $Sb++ }
-        if ($L.Contains('Surfacing tool confirmation')) { $Ask++ }
+        if ($L.Contains('Monitor agy_tool_safety FINISHED') -and $L -notmatch 'reason="(allowed_tool|unsupported_tool)') {
+          if ($Open) { if ($A) { $Ask++ } elseif ($S) { $Sb++ } else { $Out++ } }
+          $Cmd++; $Open = $true; $A = $false; $S = $false
+        }
+        if ($L.Contains('escapable binaries=')) { $S = $true }
+        if ($L.Contains('Surfacing tool confirmation')) { $A = $true }
       }
     } finally { $Rd.Dispose() }
-    $Out = [Math]::Max(0, $Cmd - $Sb - $Ask)
+    if ($Open) { if ($A) { $Ask++ } elseif ($S) { $Sb++ } else { $Out++ } }
     Write-Output "agy 로그(추정): 명령 ${Cmd}회, 샌드박스 안 ${Sb}회, 사람 승인 창 ${Ask}회, 승인 창 없이 샌드박스 밖 실행 ${Out}회 — $($Log.FullName)"
-    if ($Out -gt 0) { Write-Output '  ↳ 승인 창 없이 샌드박스 밖에서 실행된 명령은 Auto 검토 에이전트가 승인한 것입니다(사람이 승인한 실행은 승인 창 수에 따로 셉니다). 필요하면 로그의 BypassSandbox 줄을 확인하세요.' }
+    if ($Out -gt 0) { Write-Output '  ↳ 승인 창 없이 샌드박스 밖에서 실행된 명령은 allow 규칙에 맞았거나 Auto 검토 에이전트가 승인한 것입니다(사람 승인 창이 뜬 명령은 승인 창 수에만 셉니다). 필요하면 로그의 BypassSandbox 줄을 확인하세요.' }
   } catch {
     Write-Output "agy 로그 요약 실패: $($_.Exception.Message)"
   }

@@ -4,17 +4,14 @@
       "command(regex:hc send .*)"
     ],
     "ask": [
-      "command(rm)",
-      "command(git push)",
-      "command(git reset)",
-      "command(git clean)",
-      "command(npm publish)",
-      "command(sudo)",
-      "command(hc kill)",
-      "command(hc server)",
-      "command(Remove-Item)",
-      "command(del)",
-      "command(rmdir)"
+      "command(regex:(.*[;&|]\\s*)?Remove-Item\\b.*)",
+      "command(regex:(.*[;&|]\\s*)?rm\\s.*)",
+      "command(regex:(.*[;&|]\\s*)?del\\s.*)",
+      "command(regex:(.*[;&|]\\s*)?rmdir\\b.*)",
+      "command(regex:(.*[;&|]\\s*)?git\\s+(push|reset|clean)\\b.*)",
+      "command(regex:(.*[;&|]\\s*)?hc\\s+(kill|server)\\b.*)",
+      "command(regex:(.*[;&|]\\s*)?npm\\s+publish\\b.*)",
+      "command(regex:(.*[;&|]\\s*)?sudo\\b.*)"
     ]
   }
 }

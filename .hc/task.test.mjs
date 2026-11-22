@@ -98,3 +98,24 @@ test('agy 로그는 실제 작업 입력이 있는 파일을 집계한다', () =
   assert.equal(result.status, 0);
   assert.match(result.stdout, /명령 1회.*cli-original\.log/);
 });
+
+test('agy 로그는 승인 후 샌드박스 실행과 창 없는 밖 실행을 따로 센다', () => {
+  const f = fixture();
+  fs.mkdirSync(path.join(f.dir, 'tasks'));
+  fs.writeFileSync(path.join(f.dir, 'tasks/abc.env'), 'TARGET=t1\nTURN=7\nNUDGES=0\n');
+  fs.writeFileSync(path.join(f.dir, 'reports/abc.md'), '[hc-report] id=abc status=done\n');
+  // Windows 시험 askwin1122r: ask 명령 승인 → 샌드박스 실행, 보고 샌드박스 안 실패, BypassSandbox 재시도는 창 없이 실행
+  fs.writeFileSync(path.join(f.dir, 'cli-r.log'), [
+    'HandleUserInput [hc-task] id=abc from=t2',
+    'Monitor agy_tool_safety FINISHED: triggered=true, reason="unknown_command"',
+    'Surfacing tool confirmation: "Bash"',
+    '[trusted-cli-escape] escapable binaries=[]',
+    'Monitor agy_tool_safety FINISHED: triggered=true, reason="unknown_command"',
+    '[trusted-cli-escape] escapable binaries=[]',
+    'Monitor agy_tool_safety FINISHED: triggered=true, reason="unknown_command"',
+    '',
+  ].join('\n'));
+  const result = f.run(['wait', 'abc', '0'], { AGY_LOG_DIR: f.dir, MOCK_APP: 'antigravity' });
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /명령 3회, 샌드박스 안 1회, 사람 승인 창 1회, 승인 창 없이 샌드박스 밖 실행 1회/);
+});
