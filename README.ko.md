@@ -58,6 +58,7 @@ pi: 사용자 개인용 (개발 분담 제외)
 | `.hc/task.sh`, `.hc/task.ps1` | 작업 지시 보내기·기다리기·보고 확인. 보고 메시지가 빠져도 보고 파일로 완료를 판단하고, 누락이면 이어서 하라고 다시 보낸다 |
 | `.hc/tasks/` | 보낸 지시 원문과 대기 기록(git 제외) |
 | `.hc/scope.mjs`, `.hc/scope.test.mjs` | Node 18+ 공통 소유 범위 예약·변경 검사·수정 지시 한도·verified 기록과 모의 테스트(외부 패키지 없음) |
+| `.hc/task.test.mjs` | macOS `task.sh`의 전송·대기·보고 검사·agy 로그 요약 회귀 테스트(모의 `hc`) |
 | `.hc/local.env` | 이 작업 환경 전용 설정(git 제외). `CODEX_MODE=bypass`가 있으면 Codex를 권한 우회 모드로 띄운다 |
 | `.hc/reports/` | 에이전트 보고서(git 제외) |
 | `.hc/art/` | art가 만든 이미지의 기본 저장 위치(git 제외) |
@@ -87,7 +88,7 @@ README.ko.md의 "에이전트용 셋팅 절차"에서 지금 OS에 맞는 표를
 | 4. 프로젝트 설정 | 깨끗한 checkout의 추적 파일과 추적된 `.hc/` 파일만 복사한다. 기존 작업 폴더의 `.git`, 로컬 설정, 에이전트 인증정보·보고·브라우저 세션은 복사하지 않는다. 프로젝트의 기존 manifest는 유지하고 `AGENTS.md` 5절에 스택·담당 범위·계약·테스트 명령을 채운다 |
 | 5. 에이전트 실행 | 프로젝트 폴더의 Herdr 터미널에서 Claude를 실행한다. 위임이 필요할 때 Claude가 OS에 맞는 기동 스크립트를 실행하며, 작은 작업은 단독 처리할 수 있다 |
 | 6. 통신·권한 확인 | [지휘 절차](.hc/docs/lead.md)에 따라 `담당 파일: 없음`인 읽기 전용 작업부터 보내고 보고·터미널 상태를 확인한다. 신뢰·로그인·권한 창은 사용자가 직접 처리하고 기본 샌드박스를 유지한다 |
-| 7. 작은 테스트 | `node --test .hc/scope.test.mjs`로 통과·실패·건너뜀을 기록한다. 이어서 담당 경로와 검사 명령이 명확한 작은 작업을 시도한다. 브라우저 검증은 OS별 도구와 실행 승인이 필요할 수 있다 |
+| 7. 작은 테스트 | `node --test .hc/scope.test.mjs .hc/task.test.mjs`(두 번째는 `hc`를 흉내 낸 macOS 작업 스크립트 테스트)로 통과·실패·건너뜀을 기록한다. 이어서 담당 경로와 검사 명령이 명확한 작은 작업을 시도한다. 브라우저 검증은 OS별 도구와 실행 승인이 필요할 수 있다 |
 | 8. 실제 개발 | 공유 계약을 먼저 정하고 독립 범위를 위임한다. 실제 변경과 테스트 결과를 확인한 뒤 검증을 기록한다. `wait` 성공만으로 기능 완료를 판단하지 않는다 |
 
 OS별 확인·조치는 아래 기존 표를 사용합니다. 설치 명령은 예시이므로 내려받을 스크립트를 확인하고 최신 공식 안내를 따르세요. 한 PC의 성공을 모든 환경·버전의 호환성으로 보장하지 않습니다.
@@ -134,7 +135,7 @@ PowerShell 기준입니다. Claude Code는 **Herdr 앱 안의 터미널**에서 
 | 8 | 로그인 | `agy models` (모델 목록). Codex는 사용자에게 묻는다 | **사용자 조치.** 별도 터미널에서 `codex`, `agy`를 한 번씩 실행해 로그인 |
 | 9 | Codex 권한 모드 | `Get-Content .hc\local.env -ErrorAction SilentlyContinue` | macOS 9단계와 같다. 사용자가 승인했으면 `Set-Content -Encoding ASCII .hc\local.env 'CODEX_MODE=bypass'` |
 | 10 | 하위 터미널 기동 | `powershell -NoProfile -ExecutionPolicy Bypass -File .hc\up.ps1; "exit=$LASTEXITCODE"` (`exit=0`, 둘 다 `idle`) | 아래 "문제 해결". **첫 실행은** 폴더 신뢰 창 때문에 `exit=1`이 정상이다. 샌드박스 모드의 Codex는 이어서 권한 선택 창(`Update Model Permissions`)을 띄우는데, 상태가 `idle`로 보여도 스크립트가 화면 문구로 감지해 멈춘다. 사용자가 직접 고른다. Full Access를 고를 거라면 처음부터 9단계의 `CODEX_MODE=bypass`로 띄운다 |
-| 11 | 통신 확인 | Antigravity에게 `task.ps1 send`로 `$env:HC_TERMINAL_ID` 출력 같은 짧은 작업을 보내고(`.hc/docs/lead.md` 3절) `task.ps1 wait`가 0인지 본다 | `hc read <접두사>-agy --lines 100`으로 화면을 보고 사용자에게 보고. 승인 창이 뜨면 `.hc/agy-settings.win.json`에 필요한 명령을 추가할지 사용자에게 묻는다 |
+| 11 | 통신 확인 | Antigravity에게 `task.ps1 send`로 `$env:HC_TERMINAL_ID` 출력 같은 짧은 작업을 보내고(`.hc/docs/lead.md` 3절) `task.ps1 wait`가 0인지 본다 | `hc read <접두사>-agy --lines 100`으로 화면을 보고 사용자에게 보고. 승인 창이 뜨면 사용자에게 알린다. 반복 허용이 필요하면 사용자가 프로젝트 밖 `%APPDATA%\hc-agents\agy-settings.win.json`에 직접 추가한다(`.hc/docs/lead.md` 5절) |
 | 12 | 브라우저 확인 | Antigravity에게 `브라우저: 필요`, `대상 URL: https://example.com`으로 Playwright 스크립트를 `.hc/qa/<작업ID>/`에 만들어 `page.title()`이 `Example Domain`인지 확인하고 스크린샷을 저장하게 한다. 본문에는 그 문구가 없을 수 있으므로 제목으로 판정한다 | 실패하면 화면을 사용자에게 보고 |
 
 #### 기동 스크립트 문제 해결 (공통)

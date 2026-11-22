@@ -196,8 +196,14 @@ start_codex() { # 이름
 AGY_SETTINGS="$ROOT/.hc/agy-settings.mac.json"
 AGY_USER="${XDG_CONFIG_HOME:-$HOME/.config}/hc-agents/agy-settings.mac.json"
 if [ -f "$AGY_USER" ]; then
-  if grep -q -E 'command\(\*\)|regex:\.\*\)' "$AGY_USER"; then
+  if [ ! -r "$AGY_USER" ]; then
+    echo "경고: $AGY_USER 을 읽을 수 없어 기본 목록으로 띄웁니다." >&2
+  elif ! jq empty "$AGY_USER" >/dev/null 2>&1; then
+    echo "경고: $AGY_USER JSON 파싱에 실패해 기본 목록으로 띄웁니다." >&2
+  elif grep -q -E 'command\(\*\)|regex:\.\*\)' "$AGY_USER" 2>/dev/null; then
     echo "경고: $AGY_USER 에 전체 허용 항목(command(*) 등)이 있어 쓰지 않습니다. 기본 목록으로 띄웁니다." >&2
+  elif [ "$?" -ne 1 ]; then
+    echo "경고: $AGY_USER 의 전체 허용 항목 검사에 실패해 기본 목록으로 띄웁니다." >&2
   else
     AGY_SETTINGS=$AGY_USER
     echo "참고: agy 허용 목록으로 사용자 설정 $AGY_USER 를 씁니다." >&2

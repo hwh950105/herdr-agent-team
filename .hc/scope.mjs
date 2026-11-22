@@ -137,7 +137,22 @@ const readJson = (p) => {
   try { return JSON.parse(fs.readFileSync(p, 'utf8')); }
   catch { throw new Refuse(`기록을 읽을 수 없습니다: ${p}`, 8); }
 };
-const writeJson = (p, o) => { fs.mkdirSync(TASKS, { recursive: true }); fs.writeFileSync(p, JSON.stringify(o, null, 1)); };
+const writeJson = (p, o) => {
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  const tmp = `${p}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  const fd = fs.openSync(tmp, 'wx');
+  try {
+    try {
+      fs.writeFileSync(fd, JSON.stringify(o, null, 1));
+    } finally {
+      fs.closeSync(fd);
+    }
+    fs.renameSync(tmp, p);
+  } catch (error) {
+    try { fs.unlinkSync(tmp); } catch { /* 최초 저장 오류를 호출자에게 전달한다. */ }
+    throw error;
+  }
+};
 const load = (id) => readJson(f(id, 'scope.json'));
 const isDone = (id) => fs.existsSync(f(id, 'verified.json')) || fs.existsSync(f(id, 'released.json'));
 

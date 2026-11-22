@@ -464,3 +464,27 @@ test('실행 중 프로세스가 쓰는 파일이 있어도 send 예약은 되�
     t.cleanup();
   }
 });
+
+test('예약 기록을 저장한 뒤 임시 파일을 남기지 않는다', () => {
+  const t = project();
+  try {
+    assert.equal(t.run('claim', 'A', 'src/').code, 0);
+    assert.equal(t.run('release', 'A', '작업 중단').code, 0);
+    assert.deepEqual(fs.readdirSync(path.join(t.root, '.hc/tasks')).sort(), [
+      'A.released.json',
+      'A.scope.json',
+    ]);
+  } finally { t.cleanup(); }
+});
+
+test('남은 임시 파일은 현황과 새 예약에서 무시한다', () => {
+  const t = project();
+  try {
+    t.write('.hc/tasks/x.scope.json.123.abc.tmp', '{broken');
+    const status = t.run('status');
+    assert.equal(status.code, 0);
+    assert.match(status.out, /예약 기록 없음/);
+    assert.equal(t.start('B', 'src/').code, 0);
+    assert.equal(t.run('status').code, 0);
+  } finally { t.cleanup(); }
+});

@@ -58,6 +58,7 @@ Both use the same Herdr app and `hc` commands; the message format (`[hc-task]` /
 | `.hc/task.sh`, `.hc/task.ps1` | Send a task, wait for it, and verify the report file; re-prompt the agent if it stopped without reporting |
 | `.hc/tasks/` | Sent task texts and wait state (git-ignored) |
 | `.hc/scope.mjs`, `.hc/scope.test.mjs` | Shared Node 18+ ownership reservations, change checks, retry limits, verified records and mock tests; no external packages |
+| `.hc/task.test.mjs` | Regression tests for the macOS `task.sh` send/wait/report checks and agy log summary, using a mock `hc` |
 | `.hc/local.env` | Local-only settings (git-ignored). `CODEX_MODE=bypass` runs Codex without its sandbox |
 | `.hc/reports/`, `.hc/qa/` | Agent reports and browser evidence (git-ignored) |
 | `.hc/art/` | Default generated-image output (git-ignored) |
@@ -88,7 +89,7 @@ Installing Herdr and logging in to Claude Code, Codex and `agy` must be done by 
 | 4. Configure your project | Copy tracked template files from a clean checkout, including the tracked `.hc/` files. Do not copy `.git`, local settings, agent credentials, reports or browser sessions from an existing workspace. Keep your project manifests; fill in `AGENTS.md` section 5 with stack, role boundaries, contracts and test commands |
 | 5. Start agents | Start Claude inside a Herdr terminal in the project folder. Claude runs the appropriate launcher when delegation is needed; small tasks can stay with Claude |
 | 6. Check messaging and permissions | Follow the [dispatch procedure](.hc/docs/lead.md). Start with a read-only task using `담당 파일: 없음`, then check its report and terminal state. Handle trust, login and permission dialogs yourself; keep sandbox defaults |
-| 7. Run a small check | Run `node --test .hc/scope.test.mjs` and record pass/fail/skip. Then try a small task with explicit write paths and a test command. Browser checks require the OS-specific tool and may request approval |
+| 7. Run a small check | Run `node --test .hc/scope.test.mjs .hc/task.test.mjs` (the second file mocks `hc` for the macOS task script) and record pass/fail/skip. Then try a small task with explicit write paths and a test command. Browser checks require the OS-specific tool and may request approval |
 | 8. Begin project work | Establish shared contracts first, delegate independent file ranges, inspect real changes and test results, then record verification. Never treat `wait` success alone as feature completion |
 
 Detailed OS check/fix tables remain in [README.ko.md](README.ko.md#에이전트용-셋팅-절차); they are not duplicated here. Install commands below are examples: inspect downloaded scripts and follow the current official instructions. Do not assume a setup tested on one machine works on every version.
@@ -120,6 +121,15 @@ Then start the agents (Claude does this itself when needed):
 .hc/up.sh                                                            # macOS
 powershell -NoProfile -ExecutionPolicy Bypass -File .hc\up.ps1       # Windows
 ```
+
+**First run usually exits 1 — this is expected.** The launcher stops while a person must answer a dialog:
+
+| Message / screen | What to do |
+|---|---|
+| Folder trust dialog (Codex or `agy`) | Choose it yourself in that terminal, then run the launcher again |
+| Codex `Update Model Permissions` | Pick a sandboxed option. Choosing **Full Access** turns the session into bypass mode; the launcher warns and stops |
+| `agy` shows `blocked` right after start | Wait a few seconds and run the launcher again if no dialog is visible |
+| Anything else | `hc read <prefix>-codex --lines 60` (or `-agy`) and read the screen before retrying |
 
 ## Layout (macOS: bercail, Windows: default)
 
