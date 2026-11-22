@@ -4,14 +4,14 @@
       "command(regex:hc send .*)"
     ],
     "ask": [
-      "command(regex:(.*[;&|]\\s*)?Remove-Item\\b.*)",
-      "command(regex:(.*[;&|]\\s*)?rm\\s.*)",
-      "command(regex:(.*[;&|]\\s*)?del\\s.*)",
-      "command(regex:(.*[;&|]\\s*)?rmdir\\b.*)",
-      "command(regex:(.*[;&|]\\s*)?git\\s+(push|reset|clean)\\b.*)",
-      "command(regex:(.*[;&|]\\s*)?hc\\s+(kill|server)\\b.*)",
-      "command(regex:(.*[;&|]\\s*)?npm\\s+publish\\b.*)",
-      "command(regex:(.*[;&|]\\s*)?sudo\\b.*)"
+      "command(regex:(?i)(.*[;&|]\\s*)?Remove-Item\\b.*)",
+      "command(regex:(?i)(.*[;&|]\\s*)?rm\\s.*)",
+      "command(regex:(?i)(.*[;&|]\\s*)?del\\s.*)",
+      "command(regex:(?i)(.*[;&|]\\s*)?rmdir\\b.*)",
+      "command(regex:(?i)(.*[;&|]\\s*)?git\\s+(push|reset|clean)\\b.*)",
+      "command(regex:(?i)(.*[;&|]\\s*)?hc\\s+(kill|server)\\b.*)",
+      "command(regex:(?i)(.*[;&|]\\s*)?npm\\s+publish\\b.*)",
+      "command(regex:(?i)(.*[;&|]\\s*)?sudo\\b.*)"
     ]
   }
 }
