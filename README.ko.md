@@ -49,6 +49,7 @@ pi: 사용자 개인용 (개발 분담 제외)
 | `CLAUDE.md` | Claude Code 전용 메모. `@AGENTS.md`와 `@.hc/docs/lead.md`를 불러온다 |
 | `.hc/docs/lead.md` | Claude 전용 지휘 절차: 기동, 지시·대기·종료 코드, `hc` 명령, OS별 명령, Codex·agy 권한 설정 |
 | `.hc/docs/scope.md` | 범위 예약·검사·`verify`·수정 재지시 세부 규칙(Claude가 해당 명령을 쓸 때만 읽음) |
+| `.hc/docs/maintenance.md` | 기존 코드의 기능 수정·추가 절차: 브랜치, 현황 파악, 기준선, 회귀 확인(Claude가 읽음) |
 | `~/.config/hc-agents/agy-settings.mac.json`, `%APPDATA%\hc-agents\agy-settings.win.json` | (선택, 프로젝트 밖) 본인 환경에서만 넓힌 agy 허용 목록. 있으면 기동 스크립트가 알리고 기본값 대신 쓴다. 에이전트가 고칠 수 없도록 프로젝트 밖에 둔다 |
 | `.hc/docs/browser-qa.md` | 브라우저 검증 규칙. `브라우저: 필요` 지시에는 작업 스크립트가 필독 문구를 자동으로 붙인다 |
 | `.hc/up.sh` | macOS: Codex·Antigravity 하위 터미널을 띄우거나 검사 |

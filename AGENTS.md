@@ -69,6 +69,7 @@
 | `브라우저: 필요` 지시 수행 (Antigravity) | `.hc/docs/browser-qa.md` |
 | 이미지 생성 (Claude가 art에 맡길 때) | `.hc/docs/lead.md` 6절 |
 | 범위 예약·검사·`verify`·수정 재지시 세부 (Claude) | `.hc/docs/scope.md` |
+| 기존 프로젝트의 기능 수정·추가 (Claude) | `.hc/docs/maintenance.md` |
 
 ## 5. 프로젝트별 설정
 
